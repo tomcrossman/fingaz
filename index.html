@@ -214,6 +214,46 @@ body.pvp header {
 body.pvp .header-actions { width: auto; }
 body.pvp main { padding: 10px 8px 12px; }
 
+/* the ladder: who is beaten, who is in front of you, who is still waiting */
+#tourney-bar {
+    position: relative; z-index: 20;
+    display: flex; align-items: center; justify-content: center; gap: 9px;
+    flex-wrap: wrap;
+    padding: 7px 12px;
+    background: var(--panel);
+    border-bottom: 3px solid var(--panel-line);
+}
+#tourney-bar[hidden] { display: none; }
+.tourney-label {
+    font-family: var(--font-display); font-size: 15px; letter-spacing: .03em;
+    text-transform: uppercase; color: var(--panel-fg);
+}
+.tourney-pips { display: flex; align-items: center; gap: 5px; }
+.pip {
+    position: relative;
+    width: 27px; height: 27px; flex: none;
+    border: 2.5px solid var(--ink); border-radius: 9px;
+    overflow: hidden; background: var(--sticker);
+}
+.pip svg { width: 100%; height: 100%; display: block; }
+.pip.todo { opacity: .4; }
+.pip.now {
+    width: 34px; height: 34px; border-radius: 11px;
+    box-shadow: 0 0 0 3px var(--gold);
+}
+/* a beaten rival is greyed and crossed off, like the knocked-out hands */
+.pip.done::after {
+    content: '';
+    position: absolute; inset: 0;
+    background: rgba(36, 31, 46, .5);
+}
+.pip.done::before {
+    content: '\2714';
+    position: absolute; inset: 0; z-index: 2;
+    display: grid; place-items: center;
+    font-size: 15px; font-weight: 900; color: #fff;
+}
+
 /* ============================================================
    FIELD
    ============================================================ */
@@ -695,6 +735,17 @@ main {
 .stats-tally .v { display: block; line-height: 1.35; padding: 2px 4px 0; font-size: 32px; letter-spacing: .02em; }
 .stats-tally .p1 { color: var(--p1); }
 .stats-tally .p2 { color: var(--p2); }
+.stats-trophies {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 8px 10px; margin: -6px 0 14px;
+    border: 3px solid var(--ink); border-radius: 15px;
+    background: var(--gold-soft); box-shadow: var(--pop);
+    font-size: 12px; font-weight: 800; color: var(--ink);
+}
+.stats-trophies[hidden] { display: none; }
+.stats-trophies .trophy { width: 26px; height: 26px; flex: none; }
+.tourney-sheet .trophy { width: 108px; height: 108px; display: block; margin: 0 auto 6px; }
+.tourney-sheet p { margin: 0; }
 .stats-head {
     font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
     color: var(--panel-fg-dim); margin: 0 0 7px 2px;
@@ -788,7 +839,7 @@ main {
     text-transform: uppercase; letter-spacing: .02em;
     color: var(--panel-fg);
 }
-.sheet-body { font-size: 12px; font-weight: 700; line-height: 1.5; color: var(--panel-fg-dim); margin-bottom: 16px; }
+.sheet-body { font-size: 12px; font-weight: 700; line-height: 1.5; color: var(--panel-fg-dim); margin-bottom: 16px; white-space: pre-line; }
 .sheet-body.says { font-style: italic; font-size: 13px; color: var(--panel-fg); }
 .sheet-body.rules { text-align: left; }
 .sheet-body.rules p { margin: 0 0 7px; }
@@ -853,6 +904,11 @@ main {
         <button class="btn btn-sm btn-gold" id="mode-btn">VS CPU</button>
     </div>
 </header>
+
+<div id="tourney-bar" hidden>
+    <span class="tourney-label" id="tourney-round">Round 1 of 6</span>
+    <div class="tourney-pips" id="tourney-pips"></div>
+</div>
 
 <main id="field">
 
@@ -1012,11 +1068,12 @@ main {
         </div>
         <div class="stats-pane" id="pane-record">
             <div class="stats-tally" id="stats-tally"></div>
+            <div class="stats-trophies" id="stats-trophies" hidden></div>
             <div class="stats-head">Recent games</div>
             <div class="stats-list" id="stats-list"></div>
         </div>
         <div class="stats-pane" id="pane-setup" hidden>
-            <div class="stats-head">Choose your rival</div>
+            <div class="stats-head" id="diff-head">Choose your rival</div>
             <div class="diff-row" id="diff-row"></div>
             <div class="stats-head">Rival speed</div>
             <div class="diff-row speed-row" id="speed-row"></div>
@@ -2734,6 +2791,14 @@ const RIVALS = {
                ai: { finish: 1,   half: 1,   trim: .35, trimBest: true,  trimWipes: true,  pick: 'hunt' } }
 };
 const rival = () => RIVALS[difficulty] || RIVALS.normal;
+
+/* A tourney is the whole roster back to back, easiest first, one life. It runs
+   on the ordinary CPU mode — only the rival changes between rounds — so every
+   portrait, taunt and profile works untouched. */
+const TOURNEY_ORDER = Object.keys(RIVALS);
+let tourney = null;        // { stage } while a run is on
+let pickedDiff = null;     // the rival you chose, put back when the run ends
+
 let difficulty = 'normal';
 let history = [];
 
@@ -2749,7 +2814,7 @@ function loadSaved() {
 function persist() {
     try {
         localStorage.setItem('fingaz-history', JSON.stringify(history.slice(-60)));
-        localStorage.setItem('fingaz-diff', difficulty);
+        localStorage.setItem('fingaz-diff', (tourney && pickedDiff) || difficulty);
         localStorage.setItem('fingaz-speed', speed);
     } catch (e) { /* file:// or private mode — session-only is fine */ }
 }
@@ -2795,16 +2860,24 @@ function closeStats() { playSound('tap'); document.getElementById('stats').hidde
 function renderStats() {
     const wins = history.filter(h => h.w === 'p1').length;
     const losses = history.length - wins;
+    const trophies = history.filter(h => h.m === 'tourney' && h.w === 'p1').length;
     document.getElementById('stats-tally').innerHTML = `
         <div class="col"><span class="who">You</span><span class="v p1">${wins}</span></div>
         <div class="col"><span class="who">played</span><span class="v" style="opacity:.35">${history.length}</span></div>
         <div class="col"><span class="who">Rival</span><span class="v p2">${losses}</span></div>`;
+    const cup = document.getElementById('stats-trophies');
+    cup.hidden = !trophies;
+    cup.innerHTML = trophies
+        ? `${trophyArt()}<span>${trophies} tourney ${trophies === 1 ? 'trophy' : 'trophies'}</span>` : '';
 
     document.getElementById('diff-row').innerHTML = Object.entries(RIVALS).map(([k, r]) =>
-        `<button class="btn${k === difficulty ? ' on' : ''}" onclick="setDifficulty('${k}')">
+        `<button class="btn${k === difficulty ? ' on' : ''}"${tourney ? ' disabled' : ''} onclick="setDifficulty('${k}')">
             <span class="face">${renderPortrait(r.art)}</span>${r.name}<span class="sub">${r.level}</span>
          </button>`
     ).join('');
+
+    document.getElementById('diff-head').textContent =
+        tourney ? 'Rival \u2014 set by the tourney' : 'Choose your rival';
 
     document.getElementById('speed-row').innerHTML = Object.entries(SPEEDS).map(([k, sp]) =>
         `<button class="btn${k === speed ? ' on' : ''}" onclick="setSpeed('${k}')">
@@ -2819,12 +2892,120 @@ function renderStats() {
     }
     list.innerHTML = history.slice().reverse().slice(0, 20).map(h => {
         const youWon = h.w === 'p1';
-        const foe = h.m === 'ai' ? ((RIVALS[h.d] || {}).name || 'Rival') : 'Player 2';
+        const name = (RIVALS[h.d] || {}).name || 'Rival';
+        const foe = h.m === 'ai' ? name : 'P2';
+        const what = h.m === 'tourney'
+            ? (youWon ? 'Trophy won' : `${name} ended the run`)
+            : (youWon ? 'You won' : foe + ' won');
+        const tag = h.m === 'tourney' ? 'Tourney'
+                  : h.m === 'ai' ? ((RIVALS[h.d] || {}).level || h.d) : '2 player';
         return `<div class="stats-row ${youWon ? 'won' : 'lost'}">
-                    <span>${youWon ? 'You won' : foe + ' won'}</span>
-                    <span class="tag">${h.m === 'ai' ? ((RIVALS[h.d] || {}).level || h.d) : '2 player'}</span>
+                    <span>${what}</span>
+                    <span class="tag">${tag}</span>
                 </div>`;
     }).join('');
+}
+
+/* ============================================================
+   TOURNEY
+   ============================================================ */
+let barStage = null;       // portraits are expensive; only redraw on a change
+
+function renderTourneyBar() {
+    const bar = document.getElementById('tourney-bar');
+    bar.hidden = !tourney;
+    if (!tourney) { barStage = null; return; }
+    if (barStage === tourney.stage) return;
+    barStage = tourney.stage;
+
+    document.getElementById('tourney-round').textContent =
+        `Round ${tourney.stage + 1} of ${TOURNEY_ORDER.length}`;
+    document.getElementById('tourney-pips').innerHTML = TOURNEY_ORDER.map((k, i) => {
+        const state = i < tourney.stage ? 'done' : i === tourney.stage ? 'now' : 'todo';
+        return `<div class="pip ${state}" title="${RIVALS[k].name}">${renderPortrait(RIVALS[k].art)}</div>`;
+    }).join('');
+}
+
+/* a cup with a fistful of fingers in it, like a bunch of flowers */
+function trophyArt() {
+    const L = '#4A373A';
+    const finger = (x, y, h, lean) => `
+        <g transform="rotate(${lean} ${x + 6.5} ${y + h})">
+            <rect x="${x}" y="${y}" width="13" height="${h}" rx="6.5"
+                  fill="#FFDCC0" stroke="${L}" stroke-width="2.4"/>
+            <ellipse cx="${x + 6.5}" cy="${y + 8}" rx="3.8" ry="5"
+                     fill="#FFC6B6" stroke="${L}" stroke-width="1.5"/>
+        </g>`;
+    return `<svg viewBox="0 0 120 120" class="trophy" aria-hidden="true">
+        ${finger(26, 16, 34, -14)}${finger(42, 4, 46, -5)}${finger(58, 8, 42, 4)}${finger(74, 20, 30, 13)}
+        <path d="M 24 44 C 12 44, 8 60, 22 66" fill="none" stroke="${L}" stroke-width="7"
+              stroke-linecap="round"/>
+        <path d="M 96 44 C 108 44, 112 60, 98 66" fill="none" stroke="${L}" stroke-width="7"
+              stroke-linecap="round"/>
+        <path d="M 24 44 C 12 44, 8 60, 22 66" fill="none" stroke="#F4B32C" stroke-width="3.4"
+              stroke-linecap="round"/>
+        <path d="M 96 44 C 108 44, 112 60, 98 66" fill="none" stroke="#F4B32C" stroke-width="3.4"
+              stroke-linecap="round"/>
+        <path d="M 22 38 L 98 38 L 92 76 C 89 90, 76 98, 60 98 C 44 98, 31 90, 28 76 Z"
+              fill="#F4B32C" stroke="${L}" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M 30 42 L 46 42 L 44 78 C 43 86, 38 90, 34 92 C 31 86, 29 62, 30 42 Z"
+              fill="#FFE1A0" opacity=".75"/>
+        <path d="M 52 98 L 68 98 L 66 108 L 54 108 Z"
+              fill="#D9931C" stroke="${L}" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M 38 108 L 82 108 L 86 118 L 34 118 Z"
+              fill="#F4B32C" stroke="${L}" stroke-width="3" stroke-linejoin="round"/>
+        <path d="M 60 52 L 63.6 60 71.6 61 65.6 67 67.2 75 60 71 52.8 75 54.4 67 48.4 61 56.4 60 Z"
+              fill="#FFF3CF" stroke="${L}" stroke-width="2.2" stroke-linejoin="round"/>
+    </svg>`;
+}
+
+function tourneyBody(html) {
+    const d = document.createElement('div');
+    d.className = 'tourney-sheet';
+    d.innerHTML = html;
+    return d;
+}
+
+/* beaten a rival: line up the next one, or pay out */
+function tourneyAdvance() {
+    tourney.stage++;
+    difficulty = TOURNEY_ORDER[tourney.stage];
+    renderTourneyBar();
+    const r = rival();
+    closeSheet();
+    openSheet(
+        `Round ${tourney.stage + 1}`,
+        `${r.name}, ${r.title}, steps up.`,
+        [{ label: 'Fight', action: resetGame }],
+        r.art, true, 'p1', false
+    );
+}
+
+function tourneyWon() {
+    history.push({ w: 'p1', m: 'tourney', d: TOURNEY_ORDER[TOURNEY_ORDER.length - 1] });
+    persist();
+    playSound('win');
+    [0, 260, 520].forEach((t, i) => setTimeout(() =>
+        burstConfetti(innerWidth * (i === 1 ? .5 : i ? .8 : .2), innerHeight * .4,
+            ['#f4b32c', '#2fa8e0', '#f0607d', '#34c79a', '#ffffff'], 90), t));
+    setMood('victory');
+    openSheet('The trophy is yours',
+        tourneyBody(`${trophyArt()}<p>All ${TOURNEY_ORDER.length} rivals, one after another — and a cup full of fingers to show for it.</p>`),
+        [{ label: 'Run it again', action: () => applyMode('tourney') },
+         { label: 'Back to VS CPU', ghost: true, action: () => applyMode('ai') }],
+        'spark');
+}
+
+function tourneyLost() {
+    const r = rival();
+    history.push({ w: 'p2', m: 'tourney', d: difficulty });
+    persist();
+    setMood('defeat');
+    openSheet(`Run over at round ${tourney.stage + 1}`,
+        taunt('victory') || `${r.name} ends the run.`,
+        [{ label: 'Start again', action: () => applyMode('tourney') },
+         { label: 'Back to VS CPU', ghost: true, action: () => applyMode('ai') }],
+        r.art, true, 'p2');
 }
 
 /* ============================================================
@@ -3064,7 +3245,8 @@ function checkWin() {
 
     const youWon = p2Out;
     gameState.locked = true;
-    recordResult(youWon ? 'p1' : 'p2');
+    // a round of a tourney is not a game on its own — the run is recorded at its end
+    if (!tourney) recordResult(youWon ? 'p1' : 'p2');
     updateUI();
 
     if (youWon) {
@@ -3084,6 +3266,10 @@ function checkWin() {
         : '';
 
     setTimeout(() => {
+        if (tourney) {
+            if (!youWon) return tourneyLost();
+            return tourney.stage >= TOURNEY_ORDER.length - 1 ? tourneyWon() : tourneyAdvance();
+        }
         setMood(youWon ? 'victory' : 'defeat');
         openSheet(
             youWon ? 'You win!' : `${p2Label()} wins!`,
@@ -3100,6 +3286,7 @@ function checkWin() {
 
 function resetGame() {
     hideShout();
+    renderTourneyBar();
     gameState.turn = 'p1';
     gameState.selectedHand = null;
     gameState.activeSpecial = null;
@@ -3117,7 +3304,7 @@ function resetGame() {
 /* ============================================================
    SHEET
    ============================================================ */
-function openSheet(title, body, actions, icon = 'spark', isPortrait = false, orientTo = null) {
+function openSheet(title, body, actions, icon = 'spark', isPortrait = false, orientTo = null, quote = true) {
     const facing = orientTo || gameState.turn;
     document.querySelector('.sheet').classList.toggle('flip',
         gameState.mode === 'pvp' && facing === 'p2');
@@ -3130,9 +3317,10 @@ function openSheet(title, body, actions, icon = 'spark', isPortrait = false, ori
 
     const b = document.getElementById('sheet-body');
     b.className = 'sheet-body';
+    const says = isPortrait && gameState.mode === 'ai' && quote;
     if (typeof body === 'string') {
-        b.textContent = isPortrait && gameState.mode === 'ai' ? `\u201c${body}\u201d` : body;
-        if (isPortrait && gameState.mode === 'ai') b.classList.add('says');
+        b.textContent = says ? `\u201c${body}\u201d` : body;
+        if (says) b.classList.add('says');
     }
     else { b.innerHTML = ''; b.appendChild(body); b.classList.add('rules'); }
 
@@ -3169,9 +3357,22 @@ function showRules() {
    CONTROLS
    ============================================================ */
 function applyMode(mode) {
-    gameState.mode = mode;
+    const tour = mode === 'tourney';
+    gameState.mode = mode === 'pvp' ? 'pvp' : 'ai';
     gameState.scores = { p1: 0, p2: 0 };
-    document.getElementById('mode-btn').textContent = mode === 'ai' ? 'VS CPU' : '2 PLAYER';
+
+    if (tour) {
+        if (!tourney) pickedDiff = difficulty;
+        tourney = { stage: 0 };
+        difficulty = TOURNEY_ORDER[0];
+    } else if (tourney) {
+        tourney = null;
+        if (pickedDiff) difficulty = pickedDiff;
+    }
+    renderTourneyBar();
+
+    document.getElementById('mode-btn').textContent =
+        tour ? 'TOURNEY' : (mode === 'ai' ? 'VS CPU' : '2 PLAYER');
     document.getElementById('p2-name').textContent = p2Label();
     const pvp = mode === 'pvp';
     lastFoeArt = null;
@@ -3184,19 +3385,25 @@ function applyMode(mode) {
 }
 
 /* switching modes throws away the current match, so ask first */
+const MODE_PITCH = {
+    ai:      { label: 'VS CPU',      line: `one rival, your pick.` },
+    pvp:     { label: '2 player',    line: 'pass one phone between you, decks facing each other.' },
+    tourney: { label: 'Tourney',     line: `all ${TOURNEY_ORDER.length} rivals back to back for the trophy \u2014 lose once and the run is over.` }
+};
+
 document.getElementById('mode-btn').addEventListener('click', () => {
-    const next = gameState.mode === 'ai' ? 'pvp' : 'ai';
     playSound('tap');
+    const current = tourney ? 'tourney' : gameState.mode;
+    const others = Object.keys(MODE_PITCH).filter(m => m !== current);
     openSheet(
-        next === 'pvp' ? 'Two players?' : 'Back to the rival?',
-        next === 'pvp'
-            ? 'Pass one phone between you \u2014 both control decks appear, facing each other. This ends the current match and resets the score.'
-            : `${rival().name} takes over as your opponent. This ends the current match and resets the score.`,
+        'Change mode?',
+        others.map(m => `${MODE_PITCH[m].label} \u2014 ${MODE_PITCH[m].line}`).join('\n') +
+        '\n\nEither one ends the current match and resets the score.',
         [
-            { label: next === 'pvp' ? 'Start 2 player' : 'Start VS CPU', action: () => applyMode(next) },
+            ...others.map(m => ({ label: MODE_PITCH[m].label, action: () => applyMode(m) })),
             { label: 'Keep playing', ghost: true, action: closeSheet }
         ],
-        next === 'pvp' ? 'fists' : 'target'
+        'target'
     );
 });
 
