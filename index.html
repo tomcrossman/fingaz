@@ -207,8 +207,11 @@ body.pvp header {
     border-bottom: 0;
     border-right: 3px solid var(--panel-line);
 }
+/* vertical-rl alone lays the letters tops-to-the-edge; the half turn faces them
+   into the board instead, the way a spine or an axis label reads */
 body.pvp .logo-title {
     writing-mode: vertical-rl;
+    transform: rotate(180deg);
     font-size: 23px;
     letter-spacing: .04em;
 }
@@ -230,9 +233,12 @@ body.pvp .scoreline {
 body.pvp .scoreline .dash { font-size: 9px; }
 body.pvp #mode-btn {
     writing-mode: vertical-rl;
+    transform: rotate(180deg);
     padding: 11px 8px;
     letter-spacing: .06em;
 }
+/* the press-shift has to carry the turn with it, or the label spins on tap */
+body.pvp #mode-btn:active:not(:disabled) { transform: translate(4px, 4px) rotate(180deg); }
 body.pvp main { padding: 10px 8px 12px; }
 
 /* ============================================================
