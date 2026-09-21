@@ -767,7 +767,9 @@ main {
     padding: 7px 10px; border: 2.5px solid var(--ink); border-radius: 11px;
     background: var(--sticker); font-size: 11px; font-weight: 700; color: var(--ink);
 }
-.stats-row .tag { font-size: 9px; opacity: .55; letter-spacing: .06em; text-transform: uppercase; }
+.stats-row .what { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.stats-row .trophy { width: 18px; height: 18px; flex: none; }
+.stats-row .tag { font-size: 9px; opacity: .55; letter-spacing: .06em; text-transform: uppercase; flex: none; }
 .stats-row.won { background: #dff3e6; }
 .stats-row.lost { background: #ffe3e8; }
 .stats-empty { font-size: 11.5px; font-weight: 700; color: var(--panel-fg-dim); text-align: center; padding: 14px 0; }
@@ -2894,13 +2896,17 @@ function renderStats() {
         const youWon = h.w === 'p1';
         const name = (RIVALS[h.d] || {}).name || 'Rival';
         const foe = h.m === 'ai' ? name : 'P2';
+        // rounds won: recorded on the run, or read back off the rival it ended on
+        const rounds = h.r !== undefined ? h.r
+                     : youWon ? TOURNEY_ORDER.length
+                     : Math.max(0, TOURNEY_ORDER.indexOf(h.d));
         const what = h.m === 'tourney'
-            ? (youWon ? 'Trophy won' : `${name} ended the run`)
+            ? (youWon ? `${trophyArt()}Tourney won` : `${name} ended the run`)
             : (youWon ? 'You won' : foe + ' won');
-        const tag = h.m === 'tourney' ? 'Tourney'
+        const tag = h.m === 'tourney' ? `${rounds} of ${TOURNEY_ORDER.length}`
                   : h.m === 'ai' ? ((RIVALS[h.d] || {}).level || h.d) : '2 player';
         return `<div class="stats-row ${youWon ? 'won' : 'lost'}">
-                    <span>${what}</span>
+                    <span class="what">${what}</span>
                     <span class="tag">${tag}</span>
                 </div>`;
     }).join('');
@@ -2982,7 +2988,8 @@ function tourneyAdvance() {
 }
 
 function tourneyWon() {
-    history.push({ w: 'p1', m: 'tourney', d: TOURNEY_ORDER[TOURNEY_ORDER.length - 1] });
+    history.push({ w: 'p1', m: 'tourney', d: TOURNEY_ORDER[TOURNEY_ORDER.length - 1],
+                   r: TOURNEY_ORDER.length });
     persist();
     playSound('win');
     [0, 260, 520].forEach((t, i) => setTimeout(() =>
@@ -2998,7 +3005,7 @@ function tourneyWon() {
 
 function tourneyLost() {
     const r = rival();
-    history.push({ w: 'p2', m: 'tourney', d: difficulty });
+    history.push({ w: 'p2', m: 'tourney', d: difficulty, r: tourney.stage });
     persist();
     setMood('defeat');
     openSheet(`Run over at round ${tourney.stage + 1}`,
