@@ -798,6 +798,12 @@ main {
 @keyframes dieWin { 0% { transform: scale(1); } 50% { transform: scale(1.24); } 100% { transform: scale(1.12); } }
 .die.won { animation: dieWin .45s cubic-bezier(.3,1.6,.5,1) forwards; }
 .toss-mid { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+/* One button rolls for both players, and the message belongs to both too, so
+   in hot-seat the whole middle turns on its side rather than facing P1. The
+   rotation leaves the unturned footprint behind, hence the margin. */
+body.pvp .toss-mid { transform: rotate(-90deg); margin: 46px 0; }
+body.pvp .toss-msg { max-width: 260px; }
+body.pvp .toss-roll:active:not(:disabled) { transform: translate(6px, 6px); }
 .toss-vs {
     font-family: var(--font-display); font-size: 25px; color: var(--panel-fg-dim);
     letter-spacing: .06em;
@@ -905,7 +911,15 @@ main {
 .speed-row .btn { padding: 9px 4px; }
 .diff-row .btn .face { width: 34px; height: 34px; display: block; margin-bottom: 3px;
     border: 2px solid var(--ink); border-radius: 9px; overflow: hidden; }
+.diff-row .btn .face { position: relative; }
 .diff-row .btn .face svg { width: 100%; height: 100%; display: block; }
+.beaten-tick {
+    position: absolute; right: -4px; bottom: -4px;
+    width: 15px; height: 15px; border-radius: 50%;
+    border: 2px solid var(--ink); background: var(--mint);
+    color: var(--ink); font-size: 8px; font-weight: 900;
+    display: grid; place-items: center; line-height: 1;
+}
 .diff-row .btn.on { background: var(--gold); }
 /* not yet earned: the face is there, in shadow, so you can see who is coming */
 .diff-row .btn.locked { opacity: 1; }
@@ -2521,7 +2535,7 @@ function playSound(name) {
    ============================================================ */
 /* Bumped with every release, alongside CACHE in sw.js — the two are meant to
    read the same, so the card tells you which build actually reached you. */
-const APP_VERSION = 'v12';
+const APP_VERSION = 'v13';
 
 const MUSIC_VOL = 0.115;
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
@@ -3153,16 +3167,23 @@ function triggerSplitModal() {
     const total = gameState[me].left + gameState[me].right;
     if (total <= 1) { say('Not enough fingers to shift!'); return; }
 
+    /* Neither hand may be shifted to nothing. Solving the ruleset showed that
+       1|1 -> 0|2 on the opening turn is a forced win for whoever moves first,
+       and it was the only winning opening — barring it leaves the game drawn
+       from the start, with no forced line for either player. Shifting fingers
+       back onto a hand that is already out stays legal; that is the point. */
     const opts = [];
-    for (let i = 0; i <= total; i++) {
-        const l = i, r = total - i;
+    for (let l = 1; l < total; l++) {
+        const r = total - l;
         if (l <= 4 && r <= 4 && (l !== gameState[me].left || r !== gameState[me].right)) {
             opts.push({ label: `${l} | ${r}`, action: () => applySplit(l, r) });
         }
     }
     if (!opts.length) { say('No other way to split those fingers!'); return; }
     opts.push({ label: 'Cancel', ghost: true, action: closeSheet });
-    openSheet('Shift', 'Slide fingers between your own hands (LEFT | RIGHT). It uses your whole turn.', opts, 'scales');
+    openSheet('Shift',
+        'Slide fingers between your own hands (LEFT | RIGHT) \u2014 you cannot leave one empty. It uses your whole turn.',
+        opts, 'scales');
 }
 
 function applySplit(l, r) {
@@ -3655,8 +3676,10 @@ function rivalGridHTML(pick, markCurrent = true) {
                     </button>`;
         }
         const on = markCurrent && k === difficulty ? ' on' : '';
+        // a tick on the ones you have beaten, so "who is left" is a look
+        const done = beaten.includes(k) ? '<span class="beaten-tick">\u2714</span>' : '';
         return `<button class="btn${on}"${tourney ? ' disabled' : ''} onclick="${pick}('${k}')">
-                    <span class="face">${renderPortrait(r.art)}</span>${r.name}<span class="sub">${r.level}</span>
+                    <span class="face">${renderPortrait(r.art)}${done}</span>${r.name}<span class="sub">${r.level}</span>
                 </button>`;
     }).join('');
 }
@@ -4347,6 +4370,7 @@ function showRules() {
         <p><b>Shift:</b> slide fingers between your own hands instead of attacking.</p>
         <p><b>Half:</b> with one hand out and an even number on the other, split it in half to bring the dead hand back.</p>
         <p><b>Minus:</b> once per game, snip a rival hand down by as many fingers as you are holding on one of your own hands.</p>
+        <p><b>Shift</b> moves fingers between your hands and can bring a knocked-out hand back \u2014 but it can never leave a hand empty.</p>
         <p><b>Team:</b> once per game, attack with both hands combined. Tap it again (or one of your own hands) to change your mind.</p>`;
     openSheet('How to play', d, [{ label: 'Got it!', action: closeSheet }], 'book');
 }
