@@ -881,6 +881,8 @@ main {
 .diff-row .btn.locked { opacity: 1; }
 .diff-row .btn.locked .face { filter: grayscale(1) brightness(.45) contrast(.8); }
 .diff-row .btn.locked { color: var(--panel-fg-dim); }
+/* the earned pair are worth marking out from the ones merely next in line */
+.diff-row .btn.locked.bonus { background: var(--gold-soft); border-style: dashed; }
 .stats-list {
     display: flex; flex-direction: column; gap: 5px;
     max-height: 190px; overflow-y: auto; margin-bottom: 14px;
@@ -1415,6 +1417,18 @@ const RIVAL_HANDS = {
         cuff: '#232A47', cuffShade: '#141931',     // wraps, to the knuckle
         style: 'wrap'
     },
+    arashi: {
+        skin: '#F6DCBE', shade: '#DFB894', line: '#2C3345',
+        nail: '#7FD4F5', nailLine: '#3E93B5',      // storm light
+        cuff: '#2B3A55', cuffShade: '#1A2438',
+        style: 'glove'
+    },
+    george: {
+        skin: '#FFDCC0', shade: '#F0B892', line: '#4A373A',
+        nail: '#FFC6B6', nailLine: '#C98B80',
+        cuff: '#F4B32C', cuffShade: '#D2940F',     // gold, because why not
+        style: 'ribbon'
+    },
     oni: {
         skin: '#E8A188', shade: '#CE8069', line: '#3A2020',
         nail: '#2A2434', nailLine: '#120E1B',      // blunt black claws
@@ -1426,7 +1440,8 @@ const RIVAL_HANDS = {
 /* the pastel behind each rival's hands */
 const FOE_SOFT = { momo: '#FCEFC6', rival: '#FFD8E2', yurei: '#E6E1F3', player2: '#FFD8E2',
                    taiga: '#FFE0C6', rin: '#E4DAF7', oni: '#FBCFC3',
-                   hana: '#FFDDEC', tetsu: '#DCE2E8', hebi: '#DAEFD6', kage: '#D8DEF2' };
+                   hana: '#FFDDEC', tetsu: '#DCE2E8', hebi: '#DAEFD6', kage: '#D8DEF2',
+                   arashi: '#D4E4F7', george: '#FFEFC2' };
 
 function paletteFor(who) {
     if (who !== 'p2' || gameState.mode !== 'ai') return PALETTE[who];
@@ -1702,6 +1717,14 @@ const PORTRAITS = {
     kage: {
         bg: '#DCE1F2', hair: '#2B3358', hair2: '#1A2040', skin: '#F4D9C2', shade: '#DDB699',
         cloth: '#232A47', cloth2: '#141931', eye: '#5AA9E6', ink: '#1B1A2A', trim: '#5AA9E6'
+    },
+    arashi: {
+        bg: '#D6E6F6', hair: '#4A6FA5', hair2: '#2E4A75', skin: '#F6DCBE', shade: '#DFB894',
+        cloth: '#2B3A55', cloth2: '#1A2438', eye: '#7FD4F5', ink: '#1F2333', trim: '#FFD84D'
+    },
+    george: {
+        bg: '#FFF0C9', hair: '#F2C75C', hair2: '#D2A03A', skin: '#FFDCC0', shade: '#F0B892',
+        cloth: '#2FA8E0', cloth2: '#1C82B4', eye: '#2FA8E0', ink: '#241F2E', trim: '#F4B32C'
     },
     player2: {
         bg: '#C9F2E4', hair: '#E2703A', hair2: '#B94F24', skin: '#FFDCC0', shade: '#F0B892',
@@ -2056,6 +2079,59 @@ function portraitKage(P, n) {
         <path d="M 21 17.5 C 24 23, 40 23, 43 17.5" fill="none" stroke="${P.ink}" stroke-width="1.5"/>`;
 }
 
+/* everything blown one way at once — the storm you earn by surviving five */
+function portraitArashi(P, n) {
+    return `
+        <path d="M 12 30 C 10 10, 22 2, 32 2 C 44 2, 54 10, 56 24
+                 L 62 20 L 55 30 L 61 33 L 50 36
+                 C 48 24, 42 18, 32 18 C 22 18, 15 22, 12 30 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 20 26.4 L 29.5 28.6 M 44 26.4 L 34.5 28.6"
+              fill="none" stroke="${P.ink}" stroke-width="2.1" stroke-linecap="round"/>
+        ${pEye(24.5, 34.5, P, true)}
+        ${pEye(39.5, 34.5, P, true)}
+        <path d="M 26.5 42.5 q 6 3 11.5 -1.5" fill="none" stroke="${P.ink}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 13 30 C 12 11, 22 3, 32 3 C 43 3, 52 11, 52 28
+                 L 46 17 L 43.5 26 L 37 16.5 L 33 25.5 L 27 15.5 L 23 24 L 17 18 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 8 12 L 15 10 L 11.5 15.5 L 17 14 L 9 24 L 12 16.5 L 6.5 18 Z"
+              fill="${P.trim}" stroke="${P.ink}" stroke-width="1.5" stroke-linejoin="round"/>`;
+}
+
+/* the last one on the list: long fair hair, blue eyes, entirely unbothered */
+function portraitGeorge(P, n) {
+    return `
+        <path d="M 10 60 C 8 22, 19 2, 32 2 C 45 2, 56 22, 54 60
+                 L 45 57 C 47 36, 46 22, 43 16
+                 C 38 24, 26 24, 21 16
+                 C 18 22, 17 36, 19 57 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 20.5 26.8 q 4.5 -2.6 8.5 -.4 M 43.5 26.8 q -4.5 -2.6 -8.5 -.4"
+              fill="none" stroke="${P.ink}" stroke-width="1.6" stroke-linecap="round"/>
+        ${pEye(24.5, 34, P)}
+        ${pEye(39.5, 34, P)}
+        <path d="M 26 41.5 q 6 5.4 12 0" fill="none" stroke="${P.ink}" stroke-width="1.8" stroke-linecap="round"/>
+        <g clip-path="url(#pf${n})">
+            <ellipse cx="21.5" cy="39.5" rx="3.4" ry="2" fill="${P.trim}" opacity=".35"/>
+            <ellipse cx="42.5" cy="39.5" rx="3.4" ry="2" fill="${P.trim}" opacity=".35"/>
+        </g>
+        <path d="M 13 34 C 12 11, 22 3, 32 3 C 42 3, 52 11, 51 34
+                 C 49 22, 44 16.5, 36 17.5
+                 C 34 22, 33.5 26, 33.5 30
+                 C 30 20, 21 17.5, 14 25 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 51 32 C 53 41, 52.5 50, 51 58 L 56 59 C 57.5 48, 56 36, 53.5 29 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M 13 32 C 11 41, 11.5 50, 13 58 L 8 59 C 6.5 48, 8 36, 10.5 29 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M 17.5 21 C 22 16.5, 42 16.5, 46.5 21 L 44.5 24.5 C 40 21, 24 21, 19.5 24.5 Z"
+              fill="${P.trim}" stroke="${P.ink}" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M 32 13.5 L 34.6 19 L 29.4 19 Z"
+              fill="${P.trim}" stroke="${P.ink}" stroke-width="1.5" stroke-linejoin="round"/>`;
+}
+
 const SWEAT = `<g class="sweat">
     <path d="M 52 17 C 55.5 22, 56.5 25, 54 27 C 51 28.5, 48.6 26, 49.6 23 C 50.2 21, 51 19, 52 17 Z"
           fill="#8ed0ff" stroke="#241f2e" stroke-width="1.4" stroke-linejoin="round"/>
@@ -2065,7 +2141,8 @@ const SWEAT = `<g class="sweat">
 const PORTRAIT_ART = {
     rival: portraitRival, player2: portraitPlayer2, momo: portraitMomo,
     yurei: portraitYurei, taiga: portraitTaiga, rin: portraitRin, oni: portraitOni,
-    hana: portraitHana, tetsu: portraitTetsu, hebi: portraitHebi, kage: portraitKage
+    hana: portraitHana, tetsu: portraitTetsu, hebi: portraitHebi, kage: portraitKage,
+    arashi: portraitArashi, george: portraitGeorge
 };
 
 function renderPortrait(kind) {
@@ -2448,6 +2525,18 @@ const THEMES = {
 /* The same bed with the screws turned: quicker, a semitone ostinato where the
    tune was, and a pulsing bass. Derived, so every theme gets one for free and
    they always stay in the same key as what they tighten. */
+/* the two you have to earn: wider and grander than the boss bed */
+THEMES.final = {
+    bpm: 126,
+    prog: [{ bass: 38, notes: [53, 57, 62] },   // Dm
+           { bass: 43, notes: [55, 58, 62] },   // Gm
+           { bass: 46, notes: [58, 62, 65] },   // Bb
+           { bass: 45, notes: [57, 61, 64] }],  // A
+    lead: { 0: 74, 8: 77, 16: 81, 24: 79, 32: 77, 40: 74, 48: 73, 56: 69 },
+    arp: .11, pad: .08, leadVol: .095, hats: true,
+    kicks: [0, 4, 8, 12], bassEvery: 2, bassDur: 2.2
+};
+
 const TIGHTENED = {};
 
 function ostinato(M) {
@@ -3147,6 +3236,26 @@ const TAUNTS = {
         victory: ['You were counted from the first roll.', 'Nothing personal. Only maths.', 'Predictable spacing.'],
         beaten: ['My count was wrong.', 'Rare. Well played.', 'I will adjust.']
     },
+    tempest: {
+        rattled: ['You keep weathering me.', 'Still standing. For now.'],
+        smug: ['Blown down again.', 'Nothing survives five in a row. Nor you.'],
+        hit:  ['Keep up.', 'That is the pace now.', 'Again. And again.'],
+        ko:   ['One gone. I do not slow down.', 'Swept.', 'Next.'],
+        trim: ['Cut down.', 'Less of that.'],
+        hurt: ['Good. Faster.', 'Hah \u2014 more!', 'You can keep pace. Barely.'],
+        victory: ['Five in a row earned you this. It was not enough.', 'You tired. I do not.', 'Come back when you can last.'],
+        beaten: ['You outlasted a storm.', 'Hah! Nobody does that.', 'Again \u2014 I want that back.']
+    },
+    legend: {
+        rattled: ['Right, you are actually good at this.', 'Best of five? Please?'],
+        smug: ['I am undefeated for a reason.', 'You have not got me yet.'],
+        hit:  ['Got you!', 'Nice try though.', 'That is how Dad taught me.'],
+        ko:   ['One down!', 'Told you.', 'That is the one.'],
+        trim: ['Snip!', 'Down you go.'],
+        hurt: ['Whoa! Okay. Okay.', 'Right, I am trying now.', 'Good one, honestly.'],
+        victory: ['Still undefeated!', 'Good game though \u2014 really.', 'One more? I will go easy. I will not.'],
+        beaten: ['\u2026Well. That is that, then.', 'You beat everyone. Including me.', 'Rematch. Tomorrow. I mean it.']
+    },
     brutal: {
         rattled: ['YOU. Again.', 'This does not happen.'],
         smug: ['You come back to be broken.', 'Again, then.'],
@@ -3293,7 +3402,20 @@ const RIVALS = {
     ruthless:  { name: 'Kage',     title: 'the Sniper',     art: 'kage',   level: 'Ruthless', theme: 'boss',
                  ai: { finish: 1,   half: 1,   trim: .3,  trimBest: true,  trimWipes: true,  pick: 'sniper' } },
     brutal:    { name: 'Oni',      title: 'the Warlord',    art: 'oni',    level: 'Brutal', theme: 'boss',
-                 ai: { finish: 1,   half: 1,   trim: .35, trimBest: true,  trimWipes: true,  pick: 'hunt' } }
+                 ai: { finish: 1,   half: 1,   trim: .35, trimBest: true,  trimWipes: true,  pick: 'hunt' } },
+
+    /* The last two are not next on the ladder — they are earned by doing
+       something. They stay out of a tourney draw until they are yours. */
+    tempest:   { name: 'Arashi',   title: 'the Tempest',    art: 'arashi', level: 'Relentless', theme: 'final',
+                 bonus: true, req: 'Win 2 tourneys',
+                 need: () => trophies >= 2,
+                 progress: () => `${Math.min(trophies, 2)}/2 tourneys`,
+                 ai: { finish: 1,   half: 1,   trim: .6,  trimBest: true,  trimWipes: true,  pick: 'hunt' } },
+    legend:    { name: 'George',   title: 'the Undefeated', art: 'george', level: 'Legend', theme: 'final',
+                 bonus: true, req: 'Beat every other rival',
+                 need: () => LADDER.every(k => beaten.includes(k)),
+                 progress: () => `${LADDER.filter(k => beaten.includes(k)).length}/${LADDER.length} beaten`,
+                 ai: { finish: 1,   half: 1,   trim: .5,  trimBest: true,  trimWipes: true,  pick: 'perfect' } }
 };
 const rival = () => RIVALS[difficulty] || RIVALS.normal;
 
@@ -3302,11 +3424,13 @@ const rival = () => RIVALS[difficulty] || RIVALS.normal;
    profile works untouched. The five are drawn one from each fifth of the
    ladder, so a run always climbs but never has the same card twice running. */
 const ROSTER = Object.keys(RIVALS);
+/* the ordinary climb, without the two that are earned another way */
+const LADDER = ROSTER.filter(k => !RIVALS[k].bonus);
 const TOURNEY_ROUNDS = 5;
 
 function drawTourneyLadder() {
     // the whole ladder, unlocked or not — a run is how you meet the rest
-    const pool = ROSTER.slice();
+    const pool = ROSTER.filter(k => !RIVALS[k].bonus || isUnlocked(k));
     const per = Math.max(1, Math.floor(pool.length / TOURNEY_ROUNDS));
     const out = [];
     for (let i = 0; i < TOURNEY_ROUNDS; i++) {
@@ -3341,6 +3465,12 @@ function playedLabel(ms) {
     return `${h}h ${mins % 60}m`;
 }
 
+/* The bonus pair are earned by doing something, not by working along the
+   ladder, so what they need is counted in its own right — the match history
+   only keeps sixty games and cannot be trusted to remember a trophy. */
+let beaten = [];
+let trophies = 0;
+
 let unlocked = STARTING_ROSTER.slice();
 let pendingChallenger = null;   // earned mid-run; shown once the run is over
 
@@ -3357,7 +3487,15 @@ function unlock(key) {
    tourney — where the draw reaches past what you have earned — and you have
    earned that one instead. */
 function unlockFromWin(key) {
-    return tourney ? unlock(key) : unlock(ROSTER[ROSTER.indexOf(key) + 1]);
+    // the bonus pair are never "next along" — they have their own conditions
+    return tourney ? unlock(key) : unlock(LADDER[LADDER.indexOf(key) + 1]);
+}
+
+/* checked after every win: the two earned rivals let themselves in */
+function bonusUnlocks() {
+    return ROSTER.filter(k => RIVALS[k].bonus && !isUnlocked(k) && RIVALS[k].need())
+                 .map(k => unlock(k))
+                 .filter(Boolean);
 }
 
 let tourney = null;        // { stage, order } while a run is on
@@ -3374,6 +3512,9 @@ function loadSaved() {
         const sp = localStorage.getItem('fingaz-speed');
         if (SPEEDS[sp]) speed = sp;
         playMs = Math.max(0, parseInt(localStorage.getItem('fingaz-playms') || '0', 10) || 0);
+        trophies = Math.max(0, parseInt(localStorage.getItem('fingaz-trophies') || '0', 10) || 0);
+        const bt = JSON.parse(localStorage.getItem('fingaz-beaten') || 'null');
+        if (Array.isArray(bt)) beaten = ROSTER.filter(k => bt.includes(k));
         const un = JSON.parse(localStorage.getItem('fingaz-unlocked') || 'null');
         if (Array.isArray(un)) unlocked = ROSTER.filter(k => un.includes(k) || STARTING_ROSTER.includes(k));
         if (!isUnlocked(difficulty)) difficulty = STARTING_ROSTER[STARTING_ROSTER.length - 1];
@@ -3386,6 +3527,8 @@ function persist() {
         localStorage.setItem('fingaz-speed', speed);
         localStorage.setItem('fingaz-unlocked', JSON.stringify(unlocked));
         localStorage.setItem('fingaz-playms', String(Math.round(playTotal())));
+        localStorage.setItem('fingaz-trophies', String(trophies));
+        localStorage.setItem('fingaz-beaten', JSON.stringify(beaten));
     } catch (e) { /* file:// or private mode — session-only is fine */ }
 }
 function recordResult(winner) {
@@ -3452,7 +3595,8 @@ function closeStats() { playSound('tap'); document.getElementById('stats').hidde
 function renderStats() {
     const wins = history.filter(h => h.w === 'p1').length;
     const losses = history.length - wins;
-    const trophies = history.filter(h => h.m === 'tourney' && h.w === 'p1').length;
+    // counted as they are won, since the history only keeps the last sixty games
+    const cups = Math.max(trophies, history.filter(h => h.m === 'tourney' && h.w === 'p1').length);
     document.getElementById('stats-tally').innerHTML = `
         <div class="col"><span class="who">You</span><span class="v p1">${wins}</span></div>
         <div class="col"><span class="who">played</span><span class="v" style="opacity:.35">${history.length}</span></div>
@@ -3460,15 +3604,16 @@ function renderStats() {
     document.getElementById('stats-played').textContent = `${playedLabel(playTotal())} played`;
 
     const cup = document.getElementById('stats-trophies');
-    cup.hidden = !trophies;
-    cup.innerHTML = trophies
-        ? `${trophyArt()}<span>${trophies} tourney ${trophies === 1 ? 'trophy' : 'trophies'}</span>` : '';
+    cup.hidden = !cups;
+    cup.innerHTML = cups
+        ? `${trophyArt()}<span>${cups} tourney ${cups === 1 ? 'trophy' : 'trophies'}</span>` : '';
 
     document.getElementById('diff-row').innerHTML = Object.entries(RIVALS).map(([k, r]) => {
         if (!isUnlocked(k)) {
-            const after = RIVALS[ROSTER[ROSTER.indexOf(k) - 1]];
-            return `<button class="btn locked" disabled title="Beat ${after ? after.name : 'the one before'}">
-                        <span class="face">${renderPortrait(r.art)}</span>???<span class="sub">Beat ${after ? after.name : '\u2014'}</span>
+            const after = RIVALS[LADDER[LADDER.indexOf(k) - 1]];
+            const how = r.bonus ? r.progress() : `Beat ${after ? after.name : '\u2014'}`;
+            return `<button class="btn locked${r.bonus ? ' bonus' : ''}" disabled title="${r.bonus ? r.req : how}">
+                        <span class="face">${renderPortrait(r.art)}</span>???<span class="sub">${how}</span>
                     </button>`;
         }
         return `<button class="btn${k === difficulty ? ' on' : ''}"${tourney ? ' disabled' : ''} onclick="setDifficulty('${k}')">
@@ -3662,6 +3807,9 @@ function flushPendingChallenger() {
 function tourneyWon() {
     history.push({ w: 'p1', m: 'tourney', d: tourney.order[tourney.order.length - 1],
                    r: tourney.order.length });
+    trophies++;
+    const earned = bonusUnlocks();
+    if (earned.length) pendingChallenger = earned[0];
     persist();
     playSound('win');
     [0, 260, 520].forEach((t, i) => setTimeout(() =>
@@ -3772,6 +3920,15 @@ function cpuTurn() {
         const lined = pool.filter(m => m.pressure === most);
         const cover = Math.min(...lined.map(m => m.threats));
         return go(rand(lined.filter(m => m.threats === cover)));
+    }
+
+    // weighs the whole board instead of filtering one thing at a time, so it
+    // will accept a little exposure for a much better next turn
+    if (A.pick === 'perfect') {
+        const score = m => (m.wins ? 1000 : 0) + (m.kills ? 120 : 0)
+                         + m.pressure * 14 - m.threats * 16 + m.harm * .5;
+        const best = Math.max(...moves.map(score));
+        return go(rand(moves.filter(m => score(m) === best)));
     }
 
     const most = Math.max(...safe.map(m => m.pressure));
@@ -3943,8 +4100,15 @@ function checkWin() {
     gameState.locked = true;
     playClockOff();
     // beating a rival opens the next one along; mid-run it waits for the run
+    if (youWon && gameState.mode === 'ai' && !beaten.includes(difficulty)) {
+        beaten.push(difficulty);          // for the "beat every rival" condition
+        persist();
+    }
     const earned = (youWon && gameState.mode === 'ai') ? unlockFromWin(difficulty) : null;
+    const bonus = (youWon && gameState.mode === 'ai') ? bonusUnlocks() : [];
     if (earned && tourney && !tourney.introduced.includes(earned)) pendingChallenger = earned;
+    // an earned rival always trumps the next one along for the entrance
+    if (bonus.length) pendingChallenger = bonus[0];
     // a round of a tourney is not a game on its own — the run is recorded at its end
     if (!tourney) recordResult(youWon ? 'p1' : 'p2');
     updateUI();
@@ -3970,7 +4134,8 @@ function checkWin() {
             if (!youWon) return tourneyLost();
             return tourney.stage >= tourney.order.length - 1 ? tourneyWon() : tourneyAdvance();
         }
-        if (earned) { setMood('victory'); return offerChallenger(earned); }
+        const arrival = bonus[0] || earned;
+        if (arrival) { pendingChallenger = null; setMood('victory'); return offerChallenger(arrival); }
         setMood(youWon ? 'victory' : 'defeat');
         openSheet(
             youWon ? 'You win!' : `${p2Label()} wins!`,
