@@ -203,19 +203,22 @@ header > .header-actions { justify-self: end; }
    on their side so they face neither player and both. How to play and sound
    are a match apart: they live in the record card, which the score opens. */
 body.pvp header { display: none; }
-body.pvp #hs-hud {
-    display: flex; flex-direction: column; align-items: center; gap: 6px;
-    flex: none;
-    transform: rotate(-90deg);
+/* one control on each side of the bubble, both turned the same way. The slots
+   are a fixed, equal width so the bubble sits on the centre line; each holds a
+   rotated button, which is narrower than its slot and taller than the row —
+   hence the min-height, so it has somewhere to go. */
+body.pvp .hs-slot {
+    display: flex; align-items: center; justify-content: center;
+    flex: 0 0 44px;
+    min-width: 0;
 }
-body.pvp #hs-hud .header-actions { width: auto; flex-direction: column; gap: 6px; }
-/* tucked away rather than crowding the middle of the board */
-body.pvp #help-btn, body.pvp #sound-btn { display: none; }
+body.pvp .hs-slot > * { transform: rotate(-90deg); flex: none; white-space: nowrap; }
+body.pvp .header-actions { width: auto; }
 body.pvp #mode-btn { font-size: 10.5px; padding: 7px 9px; }
 body.pvp .scoreline { font-size: 17px; padding: 3px 8px; }
-body.pvp .bubble-wrap { align-items: center; gap: 8px; }
+body.pvp .bubble-wrap { align-items: center; gap: 8px; min-height: 88px; }
 body.pvp main { padding: 10px 12px 14px; }
-#hs-hud { display: none; }
+.hs-slot { display: none; }
 
 /* nothing starts until a mode is picked — the game opens on the choice rather
    than dropping you into a rival you did not ask for */
@@ -419,6 +422,12 @@ main {
     display: inline-block;
 }
 
+/* The hard shadow is what makes a card look tappable, so only a card you can
+   actually act on gets one. Everything else sits back on a faint one — chiefly
+   the rival's hands while you are still choosing your own, which a new player
+   read as "tap me first". No transform here: shifting the cards on every turn
+   would jitter the whole row. */
+.hand-card.waiting { box-shadow: 2px 2px 0 rgba(36, 31, 46, .22); cursor: default; }
 .hand-card.selected { transform: translateY(-4px); box-shadow: 6px 10px 0 var(--gold), 0 0 0 3px var(--gold); }
 .hand-card.target { animation: targetBlink 1s infinite ease-in-out; }
 @keyframes targetBlink {
@@ -800,7 +809,9 @@ main {
 .stats-empty { font-size: 11.5px; font-weight: 700; color: var(--panel-fg-dim); text-align: center; padding: 14px 0; }
 .stats-extra { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
 .stats-extra[hidden] { display: none; }
-.stats-extra .btn { padding: 10px 6px; }
+.stats-extra .btn { padding: 10px 6px; gap: 6px; }
+.stats-extra .icon { width: 15px; height: 15px; }
+.sound-ic { display: inline-flex; flex: none; }
 .stats-close { width: 100%; padding: 11px; font-size: 13px; }
 
 /* The board is built end to end for two players facing each other, so a phone
@@ -935,8 +946,6 @@ main {
         <span class="s2" id="score-p2">0</span>
     </button>
     <div class="header-actions">
-        <button class="btn btn-icon" id="help-btn" title="How to play">?</button>
-        <button class="btn btn-icon" id="sound-btn" title="Sound"></button>
         <button class="btn btn-sm btn-gold" id="mode-btn">VS CPU</button>
     </div>
 </header>
@@ -1011,12 +1020,13 @@ main {
     </section>
 
     <div class="bubble-wrap">
-        <div id="hs-hud"></div>
+        <div class="hs-slot" id="hs-left"></div>
         <div class="rival-shout" id="rival-shout" hidden>
             <span class="rs-name" id="rs-name">Rival</span>
             <span class="rs-text" id="rs-text"></span>
         </div>
         <div class="bubble" id="bubble">Pick one of your hands, then tap a rival hand to strike!</div>
+        <div class="hs-slot" id="hs-right"></div>
     </div>
 
     <section class="p1-side">
@@ -1123,9 +1133,12 @@ main {
             <div class="stats-head">Rival speed</div>
             <div class="diff-row speed-row" id="speed-row"></div>
         </div>
-        <div class="stats-extra" id="stats-extra" hidden>
-            <button class="btn btn-sm" id="stats-help">How to play</button>
-            <button class="btn btn-sm" id="stats-sound">Sound</button>
+        <div class="stats-extra" id="stats-extra">
+            <button class="btn btn-sm" id="stats-help"><span data-icon="book"></span> How to play</button>
+            <button class="btn btn-sm" id="stats-sound">
+                <span class="sound-ic" id="stats-sound-icon"></span>
+                <span id="stats-sound-label">Sound on</span>
+            </button>
         </div>
         <button class="btn btn-gold stats-close" onclick="closeStats()">Back to the game</button>
     </div>
@@ -2328,7 +2341,7 @@ function updateUI() {
     });
 
     ['p1-hand-left', 'p1-hand-right', 'p2-hand-left', 'p2-hand-right'].forEach(id =>
-        document.getElementById(id).classList.remove('selected', 'target'));
+        document.getElementById(id).classList.remove('selected', 'target', 'waiting'));
 
     if (gameState.selectedHand) {
         const s = gameState.selectedHand;
@@ -2346,6 +2359,15 @@ function updateUI() {
             if (gameState[defender][side] > 0) document.getElementById(`${defender}-hand-${side}`).classList.add('target');
         });
     }
+
+    // a card is only raised while it can be tapped: your own hands on your turn,
+    // the rival's once you have picked one and they are a target
+    const yours = gameState.turn === 'p1' || gameState.mode === 'pvp';
+    ['p1', 'p2'].forEach(w => ['left', 'right'].forEach(side => {
+        const live = gameState[w][side] > 0 && yours && !gameState.locked;
+        const tappable = live && (w === attacker || showTargets);
+        document.getElementById(`${w}-hand-${side}`).classList.toggle('waiting', !tappable);
+    }));
 
     // show what each hit would do, so the sum is visible before committing
     const flipPreview = gameState.mode === 'pvp' && attacker === 'p2';
@@ -2900,8 +2922,6 @@ function showStatsTab(name) {
 
 function openStats() {
     playSound('tap');
-    // in hot-seat the header is gone, so these two live here instead
-    document.getElementById('stats-extra').hidden = gameState.mode !== 'pvp';
     document.getElementById('stats').hidden = false;
     showStatsTab('record');
     renderStats();
@@ -3434,9 +3454,12 @@ function applyMode(mode) {
     lastFoeArt = null;
     document.getElementById('p2-deck-avatar').innerHTML = renderPortrait('player2');
     // the same buttons, carrying their handlers, rather than a second set
-    const home = pvp ? document.getElementById('hs-hud') : document.querySelector('header');
-    home.appendChild(document.getElementById('score-btn'));
-    home.appendChild(document.querySelector('.header-actions'));
+    // score to one side of the bubble, mode to the other; in single player they
+    // both go home to the header
+    (pvp ? document.getElementById('hs-left') : document.querySelector('header'))
+        .appendChild(document.getElementById('score-btn'));
+    (pvp ? document.getElementById('hs-right') : document.querySelector('header'))
+        .appendChild(document.querySelector('.header-actions'));
     document.getElementById('p1-name').textContent = pvp ? 'P1' : 'YOU';
     document.getElementById('p2-deck').hidden = !pvp;
     document.getElementById('p2-nameplate').hidden = pvp;
@@ -3475,12 +3498,10 @@ function paintIcons(root = document) {
 function setSound(on) {
     soundEnabled = on;
     musicOn = on;
-    document.getElementById('sound-btn').innerHTML = on ? ICONS.soundOn : ICONS.soundOff;
-    document.getElementById('stats-sound').textContent = on ? 'Sound on' : 'Sound off';
+    document.getElementById('stats-sound-icon').innerHTML = on ? ICONS.soundOn : ICONS.soundOff;
+    document.getElementById('stats-sound-label').textContent = on ? 'Sound on' : 'Sound off';
     if (on) startMusic(); else stopMusic();
 }
-
-document.getElementById('sound-btn').addEventListener('click', () => setSound(!soundEnabled));
 document.getElementById('stats-sound').addEventListener('click', () => { playSound('tap'); setSound(!soundEnabled); });
 document.getElementById('stats-help').addEventListener('click', () => { closeStats(); showRules(); });
 
@@ -3497,7 +3518,6 @@ function tryStartMusic() {
 }
 MUSIC_GESTURES.forEach(ev => addEventListener(ev, tryStartMusic, { passive: true }));
 
-document.getElementById('help-btn').addEventListener('click', showRules);
 document.getElementById('score-btn').addEventListener('click', openStats);
 
 function startMode(mode) {
@@ -3514,8 +3534,7 @@ document.getElementById('start-modes').innerHTML = Object.entries(MODE_PITCH).ma
 
 loadSaved();
 paintIcons();
-document.getElementById('sound-btn').innerHTML = ICONS.soundOn;
-document.getElementById('stats-sound').textContent = 'Sound on';
+setSound(soundEnabled);
 document.getElementById('p1-avatar').innerHTML = renderPortrait('hero');
 document.getElementById('p2-avatar').innerHTML = renderPortrait('rival');
 updateUI();
