@@ -1,0 +1,2737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Fingaz</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Comic+Neue:wght@400;700&display=swap" rel="stylesheet">
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#efe9df">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Fingaz">
+<meta name="mobile-web-app-capable" content="yes">
+
+<meta name="description" content="Fingaz — a hand-to-hand duel for two thumbs. Chopsticks, with knockouts.">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Fingaz">
+<meta property="og:description" content="A hand-to-hand duel for two thumbs. Play the CPU or pass the phone.">
+<meta property="og:image" content="og-image.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<style>
+/* ============================================================
+   TOKENS
+   ============================================================ */
+:root {
+    --page:        #efe9df;
+    --page-dot:    rgba(36, 31, 46, 0.10);
+    --panel:       #fffdf8;
+    --panel-fg:    #241f2e;
+    --panel-fg-dim:#6c6478;
+    --panel-line:  #241f2e;
+    --card:        #fffdf8;
+    --ink:         #241f2e;
+    --sticker:     #fffdf8;
+
+    --p1:          #2fa8e0;
+    --p1-soft:     #cdeaff;
+    --p2:          #f0607d;
+    --p2-soft:     #ffd8e0;
+    --gold:        #f4b32c;
+    --gold-soft:   #ffeec4;
+    --mint:        #34c79a;
+    --danger:      #ef4444;
+
+    --pop:         4px 4px 0 var(--ink);
+    --pop-lg:      6px 6px 0 var(--ink);
+
+    /* Comic-book lettering, with locally installed fallbacks so the game still
+       looks right with no network. */
+    --font:         "Comic Neue", "Comic Sans MS", "Chalkboard SE", "Segoe Print", system-ui, sans-serif;
+    --font-display: "Bangers", "Comic Sans MS", "Chalkboard SE", "Impact", system-ui, sans-serif;
+}
+
+* { box-sizing: border-box; touch-action: manipulation; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+
+body {
+    margin: 0;
+    min-height: 100svh;
+    font-family: var(--font);
+    color: var(--panel-fg);
+    background-color: var(--page);
+    background-image: radial-gradient(var(--page-dot) 1.2px, transparent 1.2px);
+    background-size: 7px 7px;
+    display: flex;
+    flex-direction: column;
+    overflow-x: hidden;
+}
+
+/* Diagonal speed-line wash behind everything */
+body::before {
+    content: '';
+    position: fixed;
+    inset: -20%;
+    z-index: 0;
+    pointer-events: none;
+    opacity: 0.5;
+    background: repeating-linear-gradient(112deg,
+        transparent 0 26px,
+        var(--page-dot) 26px 27px,
+        transparent 27px 60px);
+    mask-image: radial-gradient(ellipse at 50% 42%, transparent 32%, #000 78%);
+    -webkit-mask-image: radial-gradient(ellipse at 50% 42%, transparent 32%, #000 78%);
+}
+
+#fx-canvas { position: fixed; inset: 0; width: 100vw; height: 100vh; pointer-events: none; z-index: 60; }
+
+/* ============================================================
+   BUILDING BLOCKS
+   ============================================================ */
+.panel {
+    background: var(--panel);
+    border: 3px solid var(--panel-line);
+    border-radius: 16px;
+    box-shadow: var(--pop);
+}
+.btn {
+    font-family: var(--font);
+    font-weight: 700;
+    color: var(--ink);
+    background: var(--sticker);
+    border: 3px solid var(--ink);
+    border-radius: 13px;
+    box-shadow: var(--pop);
+    cursor: pointer;
+    transition: transform .07s ease, box-shadow .07s ease, background .15s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    line-height: 1;
+}
+.btn:active:not(:disabled) { transform: translate(4px, 4px); box-shadow: 0 0 0 var(--ink); }
+.btn:disabled { opacity: .38; box-shadow: 2px 2px 0 var(--ink); cursor: not-allowed; }
+/* available to tap, but it will tell you why it cannot run */
+.btn.muted:not(:disabled) { opacity: .5; }
+.btn-sm { font-size: 11px; padding: 8px 10px; border-width: 2.5px; border-radius: 11px; box-shadow: 3px 3px 0 var(--ink); }
+.btn-icon { width: 36px; height: 36px; padding: 0; font-size: 15px; }
+.btn-gold { background: var(--gold); }
+.btn-p1 { background: var(--p1-soft); }
+.btn-p2 { background: var(--p2-soft); }
+.btn-mint { background: #c9f2e4; }
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+header {
+    position: sticky;
+    top: 0;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px;
+    background: var(--panel);
+    border-bottom: 3px solid var(--panel-line);
+}
+.logo-wrap { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.logo-mark {
+    width: 38px; height: 38px; flex: none;
+    border: 3px solid var(--ink);
+    border-radius: 12px;
+    background: var(--gold);
+    box-shadow: 3px 3px 0 var(--ink);
+    display: grid; place-items: center;
+    font-size: 19px;
+}
+.logo-title {
+    font-family: var(--font-display);
+    font-size: 32px;
+    font-weight: 400;
+    letter-spacing: .02em;
+    line-height: .9;
+    margin: 0;
+    text-transform: uppercase;
+    color: var(--panel-fg);
+}
+.logo-sub {
+    font-size: 8.5px; font-weight: 700; letter-spacing: .22em;
+    text-transform: uppercase; color: var(--panel-fg-dim);
+}
+.header-actions { display: flex; align-items: center; gap: 6px; }
+.scoreline {
+    display: flex; align-items: center; gap: 4px;
+    font-family: var(--font-display); font-size: 19px; font-weight: 400;
+    padding: 4px 9px;
+    border: 2.5px solid var(--ink);
+    border-radius: 11px;
+    background: var(--sticker);
+    box-shadow: 3px 3px 0 var(--ink);
+    color: var(--ink);
+    cursor: pointer;
+    transition: transform .07s ease, box-shadow .07s ease;
+}
+.scoreline:active { transform: translate(3px, 3px); box-shadow: 0 0 0 var(--ink); }
+.scoreline .s1 { color: var(--p1); }
+.scoreline .s2 { color: var(--p2); }
+.scoreline .dash { color: var(--panel-fg-dim); font-size: 11px; }
+
+/* ============================================================
+   FIELD
+   ============================================================ */
+main {
+    flex: 1;
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 430px;
+    margin: 0 auto;
+    padding: 10px 12px 14px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: 6px;
+}
+
+.nameplate {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 7px 9px;
+    background: var(--panel);
+    border: 3px solid var(--panel-line);
+    border-radius: 14px;
+    box-shadow: var(--pop);
+}
+.nameplate .who { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.avatar {
+    width: 38px; height: 38px; flex: none;
+    border: 2.5px solid var(--ink);
+    border-radius: 11px;
+    display: grid; place-items: center;
+    font-size: 16px;
+    background: var(--p2-soft);
+    overflow: hidden;
+    padding: 0;
+}
+.avatar .portrait { width: 100%; height: 100%; display: block; }
+
+/* portraits blink, sweat when they lose a hand, and gloat when they take one */
+.portrait .lid {
+    transform-box: fill-box; transform-origin: top; transform: scaleY(0);
+    animation: blink 6.4s infinite; animation-delay: var(--blink-delay, 0s);
+}
+@keyframes blink { 0%, 93%, 100% { transform: scaleY(0); } 95.5%, 96.8% { transform: scaleY(1); } }
+.portrait .sweat { opacity: 0; }
+.avatar.rattled .portrait .sweat { animation: sweatBead 1.6s ease-out; }
+@keyframes sweatBead {
+    0%   { opacity: 0; transform: translateY(-5px); }
+    22%  { opacity: 1; transform: translateY(0); }
+    75%  { opacity: 1; transform: translateY(5px); }
+    100% { opacity: 0; transform: translateY(11px); }
+}
+.avatar.gloating { animation: gloat .7s ease-in-out; }
+@keyframes gloat {
+    0%, 100% { transform: rotate(0) scale(1); }
+    30%      { transform: rotate(-6deg) scale(1.1); }
+    65%      { transform: rotate(4deg) scale(1.06); }
+}
+.avatar.is-p1 { background: var(--p1-soft); }
+.nameplate .label {
+    /* flex so the badge's padding/border sit inside the row instead of
+       bleeding over the status line below */
+    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+    margin-bottom: 2px;
+    font-size: 12.5px; font-weight: 700; letter-spacing: .02em; color: var(--panel-fg);
+}
+.nameplate .status { font-size: 10px; font-weight: 800; color: var(--panel-fg-dim); }
+.nameplate .status.taunt { color: var(--p2); font-style: italic; }
+.badges { display: flex; gap: 4px; flex: none; }
+.chip {
+    font-size: 9px; font-weight: 700; letter-spacing: .04em;
+    padding: 4px 6px;
+    border: 2px solid var(--ink);
+    border-radius: 8px;
+    color: var(--ink);
+    background: var(--sticker);
+}
+.chip.sub  { background: var(--p1-soft); }
+.chip.team { background: var(--p2-soft); }
+.chip.spent { opacity: .3; }
+.turn-flag {
+    font-size: 9px; font-weight: 700; letter-spacing: .08em;
+    padding: 3px 6px; border: 2px solid var(--ink); border-radius: 7px;
+    background: var(--gold); color: var(--ink);
+    font-family: var(--font-display); font-size: 11px; font-weight: 400;
+}
+.turn-flag.hide { display: none; }
+
+.hand-row { display: flex; gap: 10px; margin: 8px 0; }
+
+.hand-card {
+    position: relative;
+    flex: 1;
+    height: 176px;
+    padding: 6px;
+    background: var(--card);
+    border: 3px solid var(--ink);
+    border-radius: 18px;
+    box-shadow: var(--pop-lg);
+    cursor: pointer;
+    overflow: hidden;
+    transition: transform .12s ease, box-shadow .12s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+/* Pastel brush swatch behind the hand, like the reference sheet */
+.swatch {
+    position: absolute;
+    left: 10%; right: 10%; top: 14%; bottom: 20%;
+    border-radius: 34% 66% 40% 60% / 52% 38% 62% 48%;
+    transform: rotate(-6deg);
+    opacity: .85;
+    z-index: 0;
+}
+.p1-side .swatch { background: var(--p1-soft); }
+.p2-side .swatch { background: var(--p2-soft); }
+.hand-card.out .swatch { background: #e6e2ea; }
+
+.hand-art-slot { position: relative; z-index: 2; width: 100%; height: 100%; display: grid; place-items: center; min-height: 0; }
+.p2-side .hand-art-slot { transform: rotate(180deg); }
+
+.count {
+    position: absolute; bottom: 6px; z-index: 3;
+    color: var(--ink);
+    opacity: .55;
+    pointer-events: none;
+}
+.count.l { left: 13px; }
+.count.r { right: 13px; }
+.count .n {
+    font-family: var(--font-display);
+    font-size: 26px; font-weight: 400; line-height: 1;
+    display: inline-block;
+}
+
+.hand-card.selected { transform: translateY(-4px); box-shadow: 6px 10px 0 var(--gold), 0 0 0 3px var(--gold); }
+.hand-card.target { animation: targetBlink 1s infinite ease-in-out; }
+@keyframes targetBlink {
+    0%, 100% { box-shadow: var(--pop-lg); }
+    50%      { box-shadow: 6px 6px 0 var(--danger), 0 0 0 3px var(--danger); }
+}
+/* what this hand would become if you hit it */
+.preview {
+    position: absolute; top: 7px; left: 50%; z-index: 5;
+    transform: translateX(-50%);
+    padding: 3px 9px;
+    font-family: var(--font-display); font-size: 15px; letter-spacing: .03em;
+    color: var(--ink); background: #c9f2e4;
+    border: 2.5px solid var(--ink); border-radius: 9px;
+    box-shadow: 2px 2px 0 var(--ink);
+    white-space: nowrap; pointer-events: none;
+    animation: previewIn .15s ease-out;
+}
+.preview[hidden] { display: none; }
+.preview.ko { background: var(--gold); }
+/* the attacker reads it, so it flips for the player sitting opposite */
+.preview.flip { transform: translateX(-50%) rotate(180deg); }
+@keyframes previewIn { from { opacity: 0; } to { opacity: 1; } }
+
+.reticle {
+    position: absolute; top: 6px; right: 8px; z-index: 4;
+    font-size: 15px; opacity: 0; transition: opacity .2s;
+}
+.hand-card.target .reticle { opacity: 1; }
+.hand-card.out { filter: grayscale(.35); }
+
+
+/* ============================================================
+   SPEECH BUBBLE BANNER
+   ============================================================ */
+.bubble-wrap { display: flex; justify-content: center; padding: 4px 0 10px; }
+.bubble {
+    position: relative;
+    max-width: 100%;
+    padding: 11px 16px;
+    letter-spacing: .01em;
+    background: var(--panel);
+    border: 3px solid var(--panel-line);
+    border-radius: 18px;
+    box-shadow: var(--pop);
+    font-size: 12.5px;
+    font-weight: 800;
+    line-height: 1.35;
+    text-align: center;
+    color: var(--panel-fg);
+}
+.bubble::before, .bubble::after {
+    content: '';
+    position: absolute; left: 30px;
+    width: 0; height: 0;
+    border: 11px solid transparent;
+}
+.bubble::before { bottom: -22px; border-top-color: var(--panel-line); }
+.bubble::after  { bottom: -17px; border-top-color: var(--panel); }
+.bubble.up::before { bottom: auto; top: -22px; border-top-color: transparent; border-bottom-color: var(--panel-line); }
+.bubble.up::after  { bottom: auto; top: -17px; border-top-color: transparent; border-bottom-color: var(--panel); }
+.bubble.shout { background: var(--gold-soft); border-color: var(--ink); }
+.bubble.shout::after { border-top-color: var(--gold-soft); }
+.bubble.shout.up::after { border-bottom-color: var(--gold-soft); }
+
+/* ============================================================
+   CONTROL DECK
+   ============================================================ */
+.deck { padding: 10px; display: flex; flex-direction: column; gap: 9px; }
+.deck-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; row-gap: 8px; }
+.deck-moves { display: flex; gap: 6px; }
+.power-row { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+.power {
+    flex-direction: column;
+    gap: 2px;
+    padding: 9px 6px;
+    border-radius: 14px;
+}
+.power .t { font-family: var(--font-display); font-size: 17px; font-weight: 400; letter-spacing: .04em; }
+.power .d { font-size: 9px; font-weight: 800; opacity: .65; letter-spacing: .02em; }
+/* primed and waiting for a target */
+.power.armed { background-color: var(--gold); background-image: none; }
+.power.armed .d { opacity: .85; }
+@keyframes armedPulse {
+    0%, 100% { box-shadow: var(--pop); }
+    50%      { box-shadow: var(--pop), 0 0 0 5px rgba(244, 179, 44, .45); }
+}
+.power.armed:not(:disabled) { animation: armedPulse 1.2s ease-in-out infinite; }
+
+/* ============================================================
+   ANIMATIONS
+   ============================================================ */
+@keyframes lungeUp   { 0% { transform: translateY(0) } 40% { transform: translateY(-48px) scale(1.1) rotate(-3deg) } 100% { transform: translateY(0) } }
+@keyframes lungeDown { 0% { transform: translateY(0) } 40% { transform: translateY(48px) scale(1.1) rotate(3deg) } 100% { transform: translateY(0) } }
+.lunge-up   { animation: lungeUp .34s ease-in-out; z-index: 20; }
+.lunge-down { animation: lungeDown .34s ease-in-out; z-index: 20; }
+
+@keyframes hitShake {
+    0%,100% { transform: translate(0,0) }
+    20% { transform: translate(-7px,3px) rotate(-1.5deg) }
+    45% { transform: translate(7px,-3px) rotate(1.5deg) }
+    70% { transform: translate(-4px,-2px) }
+}
+.hit { animation: hitShake .38s ease-in-out; }
+
+@keyframes shakeScreen {
+    0%,100% { transform: translate(0,0) }
+    25% { transform: translate(-5px,2px) }
+    50% { transform: translate(5px,-2px) }
+    75% { transform: translate(-2px,-1px) }
+}
+.quake { animation: shakeScreen .3s ease-in-out; }
+
+@keyframes countPop { 0% { transform: scale(1) } 45% { transform: scale(1.55) } 100% { transform: scale(1) } }
+.count-pop { animation: countPop .4s cubic-bezier(.3,1.7,.5,1); display: inline-block; }
+
+/* Idle sway on live hands */
+@keyframes sway { 0%,100% { transform: translateY(0) rotate(-1deg) } 50% { transform: translateY(-3px) rotate(1deg) } }
+.hand-art { width: 100%; height: 100%; transform-origin: 50% 88%; animation: sway 3.8s ease-in-out infinite; }
+.hand-card.out .hand-art { animation: none; }
+
+/* Manga impact burst */
+.burst {
+    position: fixed; z-index: 70; pointer-events: none;
+    display: grid; place-items: center;
+    animation: burstPop 1s cubic-bezier(.2,1.4,.4,1) forwards;
+}
+@keyframes burstPop {
+    0%   { opacity: 0; transform: translate(-50%,-50%) scale(.3) rotate(-14deg); }
+    22%  { opacity: 1; transform: translate(-50%,-50%) scale(1.12) rotate(4deg); }
+    72%  { opacity: 1; transform: translate(-50%,-60%) scale(1) rotate(0deg); }
+    100% { opacity: 0; transform: translate(-50%,-95%) scale(.85) rotate(0deg); }
+}
+.burst .star {
+    width: 104px; height: 104px;
+    background: var(--gold);
+    display: grid; place-items: center;
+    clip-path: polygon(50% 0%,60% 18%,78% 8%,75% 28%,96% 33%,80% 50%,96% 67%,75% 72%,78% 92%,60% 82%,50% 100%,40% 82%,22% 92%,25% 72%,4% 67%,20% 50%,4% 33%,25% 28%,22% 8%,40% 18%);
+    filter: drop-shadow(3px 3px 0 var(--ink));
+}
+.burst .star span {
+    font-family: var(--font-display); font-size: 21px; font-weight: 400; color: var(--ink);
+    letter-spacing: .02em; text-align: center; line-height: 1;
+    white-space: pre-line;
+}
+.burst .tag {
+    font-family: var(--font-display); font-size: 36px; font-weight: 400;
+    letter-spacing: .02em;
+    -webkit-text-stroke: 5px var(--ink);
+    paint-order: stroke fill;
+}
+
+/* Speed-line flash on a hit */
+#speedlines {
+    position: fixed; inset: 0; z-index: 55; pointer-events: none; opacity: 0;
+    background: repeating-conic-gradient(from 0deg at 50% 50%,
+        rgba(36,31,46,.5) 0deg 1.1deg, transparent 1.1deg 5deg);
+    mask-image: radial-gradient(circle at 50% 50%, transparent 24%, #000 68%);
+    -webkit-mask-image: radial-gradient(circle at 50% 50%, transparent 24%, #000 68%);
+}
+@keyframes speedFlash { 0% { opacity: 0 } 18% { opacity: .85 } 100% { opacity: 0 } }
+#speedlines.go { animation: speedFlash .42s ease-out; }
+
+/* the beat of stillness that makes a hit land hard */
+#whiteflash { position: fixed; inset: 0; z-index: 90; background: #fff; opacity: 0; pointer-events: none; }
+#whiteflash.go { animation: whiteFlash .24s ease-out; }
+@keyframes whiteFlash { 0% { opacity: .92; } 100% { opacity: 0; } }
+.freeze, .freeze * { animation-play-state: paused !important; }
+
+/* streaks trailing the hand that just swung */
+.streaks {
+    position: absolute; inset: -20%; z-index: 1; opacity: 0; pointer-events: none;
+    background: repeating-linear-gradient(0deg, rgba(36, 31, 46, .30) 0 2px, transparent 2px 10px);
+}
+.hand-card.streak-up .streaks   { animation: streakUp .34s ease-out; }
+.hand-card.streak-down .streaks { animation: streakDown .34s ease-out; }
+@keyframes streakUp   { 0% { opacity: 0; transform: translateY(-14px); } 30% { opacity: .8; } 100% { opacity: 0; transform: translateY(22px); } }
+@keyframes streakDown { 0% { opacity: 0; transform: translateY(14px); }  30% { opacity: .8; } 100% { opacity: 0; transform: translateY(-22px); } }
+
+/* ============================================================
+   DICE TOSS — decides who strikes first
+   ============================================================ */
+#toss {
+    position: fixed; inset: 0; z-index: 75;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 20px; overflow-y: auto;
+    padding: 18px 12px;
+    background-color: var(--page);
+    background-image: radial-gradient(var(--page-dot) 1.2px, transparent 1.2px);
+    background-size: 7px 7px;
+}
+#toss[hidden] { display: none; }
+.toss-side { display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.toss-top { transform: rotate(180deg); }
+#toss.solo .toss-top { transform: none; }
+.toss-name {
+    font-family: var(--font-display); font-size: 19px; letter-spacing: .03em;
+    text-transform: uppercase; color: var(--panel-fg);
+}
+.die { width: 104px; height: 104px; }
+.die-art {
+    width: 100%; height: 100%; display: block;
+    filter: drop-shadow(5px 5px 0 var(--ink));
+    transition: transform .25s ease, filter .25s ease;
+}
+/* nothing rolled yet — step back and let the button lead */
+.die-art.waiting { filter: none; transform: scale(.82); }
+@keyframes tumble {
+    0%   { transform: rotate(0) translateY(0); }
+    25%  { transform: rotate(-17deg) translateY(-18px); }
+    50%  { transform: rotate(13deg) translateY(0); }
+    75%  { transform: rotate(-8deg) translateY(-11px); }
+    100% { transform: rotate(0) translateY(0); }
+}
+.die.rolling { animation: tumble .38s ease-in-out infinite; }
+@keyframes dieWin { 0% { transform: scale(1); } 50% { transform: scale(1.24); } 100% { transform: scale(1.12); } }
+.die.won { animation: dieWin .45s cubic-bezier(.3,1.6,.5,1) forwards; }
+.toss-mid { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.toss-vs {
+    font-family: var(--font-display); font-size: 25px; color: var(--panel-fg-dim);
+    letter-spacing: .06em;
+}
+.toss-msg {
+    font-size: 13px; font-weight: 700; text-align: center;
+    padding: 9px 15px; background: var(--panel);
+    border: 3px solid var(--panel-line); border-radius: 15px;
+    box-shadow: var(--pop); max-width: 320px;
+}
+.toss-roll {
+    position: relative;
+    padding: 15px 34px;
+    font-size: 21px;
+    font-family: var(--font-display); font-weight: 400; letter-spacing: .05em;
+    border-width: 3.5px; border-radius: 16px;
+    box-shadow: 6px 6px 0 var(--ink);
+}
+.toss-roll:active:not(:disabled) { transform: translate(6px, 6px); box-shadow: 0 0 0 var(--ink); }
+/* a soft ring keeps drawing the eye without fighting the press animation */
+.toss-roll::after {
+    content: ''; position: absolute; inset: -7px;
+    border: 3px solid var(--gold); border-radius: 21px;
+    opacity: 0; pointer-events: none;
+    animation: rollRing 1.9s ease-out infinite;
+}
+.toss-roll:disabled::after { display: none; }
+@keyframes rollRing {
+    0%   { opacity: .6; transform: scale(.95); }
+    70%, 100% { opacity: 0; transform: scale(1.16); }
+}
+
+/* ============================================================
+   RECORD + DIFFICULTY
+   ============================================================ */
+#stats {
+    position: fixed; inset: 0; z-index: 78;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    background: rgba(24, 20, 32, .55);
+    backdrop-filter: blur(3px);
+}
+#stats[hidden] { display: none; }
+.stats-card {
+    width: 100%; max-width: 340px; max-height: 88vh; overflow-y: auto;
+    padding: 18px;
+    background: var(--panel);
+    border: 3.5px solid var(--panel-line);
+    border-radius: 22px;
+    box-shadow: 8px 8px 0 var(--ink);
+    animation: sheetIn .22s cubic-bezier(.2,1.5,.4,1);
+}
+.stats-card h3 {
+    margin: 0 0 10px; font-family: var(--font-display); font-size: 26px;
+    text-transform: uppercase; letter-spacing: .02em; text-align: center; color: var(--panel-fg);
+}
+.stats-tally {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    padding: 10px; margin-bottom: 14px;
+    border: 3px solid var(--ink); border-radius: 15px;
+    background: var(--sticker); box-shadow: var(--pop);
+    font-family: var(--font-display); font-size: 26px; color: var(--ink);
+}
+.stats-tally .who { font-size: 10px; font-family: var(--font); font-weight: 700; opacity: .6; display: block; text-align: center; }
+.stats-tally .col { text-align: center; }
+.stats-tally .p1 { color: var(--p1); }
+.stats-tally .p2 { color: var(--p2); }
+.stats-head {
+    font-size: 10px; font-weight: 700; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--panel-fg-dim); margin: 0 0 7px 2px;
+}
+.diff-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 7px; margin-bottom: 14px; }
+.diff-row .btn { flex-direction: column; gap: 1px; padding: 8px 4px; font-size: 12px; }
+.diff-row .btn .sub { font-size: 8.5px; font-weight: 700; opacity: .6; letter-spacing: .02em; }
+.diff-row .btn .face { width: 34px; height: 34px; display: block; margin-bottom: 3px;
+    border: 2px solid var(--ink); border-radius: 9px; overflow: hidden; }
+.diff-row .btn .face svg { width: 100%; height: 100%; display: block; }
+.diff-row .btn.on { background: var(--gold); }
+.stats-list {
+    display: flex; flex-direction: column; gap: 5px;
+    max-height: 190px; overflow-y: auto; margin-bottom: 14px;
+}
+.stats-row {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    padding: 7px 10px; border: 2.5px solid var(--ink); border-radius: 11px;
+    background: var(--sticker); font-size: 11px; font-weight: 700; color: var(--ink);
+}
+.stats-row .tag { font-size: 9px; opacity: .55; letter-spacing: .06em; text-transform: uppercase; }
+.stats-row.won { background: #dff3e6; }
+.stats-row.lost { background: #ffe3e8; }
+.stats-empty { font-size: 11.5px; font-weight: 700; color: var(--panel-fg-dim); text-align: center; padding: 14px 0; }
+.stats-close { width: 100%; padding: 11px; font-size: 13px; }
+
+/* ============================================================
+   MODAL
+   ============================================================ */
+#overlay {
+    position: fixed; inset: 0; z-index: 80;
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 18px;
+    background: rgba(24, 20, 32, .55);
+    backdrop-filter: blur(3px);
+}
+#overlay.show { display: flex; }
+.sheet {
+    width: 100%; max-width: 320px;
+    padding: 20px;
+    background: var(--panel);
+    border: 3.5px solid var(--panel-line);
+    border-radius: 22px;
+    box-shadow: 8px 8px 0 var(--ink);
+    text-align: center;
+    animation: sheetIn .22s cubic-bezier(.2,1.5,.4,1);
+    max-height: 86vh;
+    overflow-y: auto;
+}
+@keyframes sheetIn { 0% { opacity: 0; transform: scale(.9) translateY(14px) } 100% { opacity: 1; transform: none } }
+.sheet-icon {
+    width: 50px; height: 50px; margin: 0 auto 10px;
+    border: 3px solid var(--ink); border-radius: 15px;
+    background: var(--gold); box-shadow: 3px 3px 0 var(--ink);
+    display: grid; place-items: center; font-size: 24px;
+    overflow: hidden;
+}
+.sheet-icon.portrait-frame { background: none; padding: 0; width: 60px; height: 60px; }
+.sheet-icon .portrait { width: 100%; height: 100%; display: block; }
+.sheet h3 {
+    margin: 0 0 8px; font-family: var(--font-display); font-size: 26px; font-weight: 400;
+    text-transform: uppercase; letter-spacing: .02em;
+    color: var(--panel-fg);
+}
+.sheet-body { font-size: 12px; font-weight: 700; line-height: 1.5; color: var(--panel-fg-dim); margin-bottom: 16px; }
+.sheet-body.says { font-style: italic; font-size: 13px; color: var(--panel-fg); }
+.sheet-body.rules { text-align: left; }
+.sheet-body.rules p { margin: 0 0 7px; }
+.sheet-body.rules b { color: var(--panel-fg); }
+.sheet-actions { display: flex; flex-direction: column; gap: 8px; }
+.sheet-actions.grid { display: grid; grid-template-columns: 1fr 1fr; }
+.sheet-actions .btn { width: 100%; padding: 11px 8px; font-size: 13px; }
+.sheet-actions .wide { grid-column: 1 / -1; }
+
+[hidden] { display: none !important; }
+
+/* Drawn icons */
+.icon { width: 1.15em; height: 1.15em; display: block; }
+[data-icon] { display: inline-flex; align-items: center; flex: none; }
+.btn-icon .icon { width: 19px; height: 19px; }
+.power .icon { width: 20px; height: 20px; }
+.btn-sm [data-icon] .icon { width: 15px; height: 15px; }
+.ic-minus { color: #1d7fae; }
+.ic-team  { color: #d2415f; }
+.reticle .icon { width: 17px; height: 17px; }
+.reticle { color: var(--danger); }
+.sheet-icon .icon { width: 27px; height: 27px; }
+.deck-flip { transform: rotate(180deg); margin-bottom: 8px; }
+
+/* Sheets and the message bubble face whoever is acting */
+@keyframes sheetInFlip {
+    0%   { opacity: 0; transform: rotate(180deg) scale(.9) translateY(14px); }
+    100% { opacity: 1; transform: rotate(180deg); }
+}
+.sheet.flip { animation: sheetInFlip .22s cubic-bezier(.2,1.5,.4,1) forwards; }
+.bubble.flip { transform: rotate(180deg); }
+
+@media (max-width: 380px) {
+    /* Half / Shift drop to their own full-width row rather than overflow */
+    .deck-moves { width: 100%; }
+    .deck-moves .btn { flex: 1; }
+    /* title takes one row, controls the next, so nothing is pushed off-screen */
+    header { flex-wrap: wrap; row-gap: 9px; }
+    .header-actions { width: 100%; justify-content: space-between; }
+}
+@media (max-width: 360px) {
+    .hand-card { height: 150px; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="fx-canvas"></canvas>
+<div id="speedlines"></div>
+<div id="whiteflash"></div>
+
+<header>
+    <h1 class="logo-title">Fingaz</h1>
+    <div class="header-actions">
+        <button class="scoreline" id="score-btn" title="Record & difficulty">
+            <span class="s1" id="score-p1">0</span>
+            <span class="dash">—</span>
+            <span class="s2" id="score-p2">0</span>
+        </button>
+        <button class="btn btn-icon" id="help-btn" title="How to play">?</button>
+        <button class="btn btn-icon" id="sound-btn" title="Sound"></button>
+        <button class="btn btn-sm btn-gold" id="mode-btn">VS CPU</button>
+    </div>
+</header>
+
+<main id="field">
+
+    <section class="p2-side">
+        <div class="panel deck deck-flip" id="p2-deck" hidden>
+            <div class="deck-top">
+                <div class="who" style="display:flex;align-items:center;gap:8px">
+                    <div class="avatar" id="p2-deck-avatar"></div>
+                    <span class="label" style="font-size:12.5px;font-weight:700">PLAYER 2</span>
+                    <span class="turn-flag hide" id="p2-deck-turn">YOUR TURN</span>
+                </div>
+                <div class="deck-moves">
+                    <button class="btn btn-sm btn-mint" id="p2-btn-half" onclick="triggerHalfSplit()"><span data-icon="half"></span> Half</button>
+                    <button class="btn btn-sm" id="p2-btn-split" onclick="triggerSplitModal()"><span data-icon="scales"></span> Shift</button>
+                </div>
+            </div>
+            <div class="power-row">
+                <button class="btn power btn-p1" id="p2-btn-sub" onclick="activateAbility('subtraction')">
+                    <span class="t"><span data-icon="scissors" class="ic-minus"></span> MINUS</span>
+                    <span class="d">Trim the rival</span>
+                </button>
+                <button class="btn power btn-p2" id="p2-btn-team" onclick="activateAbility('team')">
+                    <span class="t"><span data-icon="fists" class="ic-team"></span> TEAM</span>
+                    <span class="d">Both hands at once</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="nameplate" id="p2-nameplate">
+            <div class="who">
+                <div class="avatar" id="p2-avatar"></div>
+                <div>
+                    <div class="label">
+                        <span id="p2-name">Rival</span>
+                        <span class="turn-flag hide" id="p2-turn">TURN</span>
+                    </div>
+                    <div class="status" id="p2-status">Waiting for your move…</div>
+                </div>
+            </div>
+            <div class="badges">
+                <span class="chip sub"  id="p2-chip-sub">MINUS</span>
+                <span class="chip team" id="p2-chip-team">TEAM</span>
+            </div>
+        </div>
+
+        <div class="hand-row">
+            <div class="hand-card p2-side" id="p2-hand-left" onclick="handleHandClick('p2','left')">
+                <div class="swatch"></div>
+                <span class="reticle" data-icon="target"></span>
+                <span class="streaks"></span>
+                <span class="preview" id="p2-prev-left" hidden></span>
+                <div class="hand-art-slot" id="p2-art-left"></div>
+                <div class="count l"><span class="n" id="p2-val-left">1</span></div>
+            </div>
+            <div class="hand-card p2-side" id="p2-hand-right" onclick="handleHandClick('p2','right')">
+                <div class="swatch"></div>
+                <span class="reticle" data-icon="target"></span>
+                <span class="streaks"></span>
+                <span class="preview" id="p2-prev-right" hidden></span>
+                <div class="hand-art-slot" id="p2-art-right"></div>
+                <div class="count r"><span class="n" id="p2-val-right">1</span></div>
+            </div>
+        </div>
+    </section>
+
+    <div class="bubble-wrap">
+        <div class="bubble" id="bubble">Pick one of your hands, then tap a rival hand to strike!</div>
+    </div>
+
+    <section class="p1-side">
+        <div class="hand-row">
+            <div class="hand-card p1-side" id="p1-hand-left" onclick="handleHandClick('p1','left')">
+                <div class="swatch"></div>
+                <span class="reticle" data-icon="target"></span>
+                <span class="streaks"></span>
+                <span class="preview" id="p1-prev-left" hidden></span>
+                <div class="hand-art-slot" id="p1-art-left"></div>
+                <div class="count l"><span class="n" id="p1-val-left">1</span></div>
+            </div>
+            <div class="hand-card p1-side" id="p1-hand-right" onclick="handleHandClick('p1','right')">
+                <div class="swatch"></div>
+                <span class="reticle" data-icon="target"></span>
+                <span class="streaks"></span>
+                <span class="preview" id="p1-prev-right" hidden></span>
+                <div class="hand-art-slot" id="p1-art-right"></div>
+                <div class="count r"><span class="n" id="p1-val-right">1</span></div>
+            </div>
+        </div>
+
+        <div class="panel deck">
+            <div class="deck-top">
+                <div class="who" style="display:flex;align-items:center;gap:8px">
+                    <div class="avatar is-p1" id="p1-avatar"></div>
+                    <span class="label" style="font-size:12.5px;font-weight:900">YOU</span>
+                    <span class="turn-flag" id="p1-turn">YOUR TURN</span>
+                </div>
+                <div class="deck-moves">
+                    <button class="btn btn-sm btn-mint" id="btn-half" onclick="triggerHalfSplit()"><span data-icon="half"></span> Half</button>
+                    <button class="btn btn-sm" id="btn-split" onclick="triggerSplitModal()"><span data-icon="scales"></span> Shift</button>
+                </div>
+            </div>
+            <div class="power-row">
+                <button class="btn power btn-p1" id="btn-sub" onclick="activateAbility('subtraction')">
+                    <span class="t"><span data-icon="scissors" class="ic-minus"></span> MINUS</span>
+                    <span class="d">Trim the rival</span>
+                </button>
+                <button class="btn power btn-p2" id="btn-team" onclick="activateAbility('team')">
+                    <span class="t"><span data-icon="fists" class="ic-team"></span> TEAM</span>
+                    <span class="d">Both hands at once</span>
+                </button>
+            </div>
+        </div>
+    </section>
+
+</main>
+
+<div id="toss" hidden>
+    <div class="toss-side toss-top">
+        <div class="toss-name" id="toss-p2-name">Rival</div>
+        <div class="die" id="die-p2"></div>
+    </div>
+    <div class="toss-mid">
+        <div class="toss-vs">VS</div>
+        <div class="toss-msg" id="toss-msg">Highest roll goes first!</div>
+        <button class="btn btn-gold toss-roll" id="toss-roll" onclick="rollToss()">Roll the dice</button>
+    </div>
+    <div class="toss-side toss-bottom">
+        <div class="die" id="die-p1"></div>
+        <div class="toss-name">You</div>
+    </div>
+</div>
+
+<div id="stats" hidden>
+    <div class="stats-card">
+        <h3>Record</h3>
+        <div class="stats-tally" id="stats-tally"></div>
+        <div class="stats-head">Choose your rival</div>
+        <div class="diff-row" id="diff-row"></div>
+        <div class="stats-head">Recent games</div>
+        <div class="stats-list" id="stats-list"></div>
+        <button class="btn btn-gold stats-close" onclick="closeStats()">Back to the game</button>
+    </div>
+</div>
+
+<div id="overlay">
+    <div class="sheet">
+        <div class="sheet-icon" id="sheet-icon">✨</div>
+        <h3 id="sheet-title">Title</h3>
+        <div class="sheet-body" id="sheet-body"></div>
+        <div class="sheet-actions" id="sheet-actions"></div>
+    </div>
+</div>
+
+<script>
+/* ============================================================
+   ICONS — drawn to match the hand line-work, no emoji.
+   All use currentColor so they pick up the button's colour.
+   ============================================================ */
+const ICONS = {
+    scissors: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7.4 16.6 18.8 3.4"/><path d="M16.6 16.6 5.2 3.4"/>
+        <circle cx="5.8" cy="19" r="2.6"/><circle cx="18.2" cy="19" r="2.6"/>
+        <circle cx="12" cy="11.4" r="1.1" fill="currentColor" stroke="none"/></svg>`,
+
+    fists: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M1.4 22v-5.6a2.4 2.4 0 0 1 4.8 0 2.4 2.4 0 0 1 4.8 0V22z" transform="rotate(-13 6 20)"/>
+        <path d="M13 22v-5.6a2.4 2.4 0 0 1 4.8 0 2.4 2.4 0 0 1 4.8 0V22z" transform="rotate(13 18 20)"/>
+        <path d="M12 1 13.5 4.7 17.2 6.2 13.5 7.7 12 11.4 10.5 7.7 6.8 6.2 10.5 4.7z"
+              fill="currentColor"/></svg>`,
+
+    half: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="8.6"/>
+        <path d="M12 3.4a8.6 8.6 0 0 0 0 17.2z" fill="currentColor"/></svg>`,
+
+    scales: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3.4 8.8h15.4"/><path d="M14.8 4.6 19 8.8 14.8 13"/>
+        <path d="M20.6 16.2H5.2"/><path d="M9.2 12 5 16.2 9.2 20.4"/></svg>`,
+
+    target: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="7.6"/><circle cx="12" cy="12" r="3.2"/>
+        <path d="M12 1.4v3.4M12 19.2v3.4M1.4 12h3.4M19.2 12h3.4"/></svg>`,
+
+    soundOn: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3.4 9.2h3.6L11.8 5v14L7 14.8H3.4z" fill="currentColor"/>
+        <path d="M15.4 9.4a4.4 4.4 0 0 1 0 5.2"/><path d="M18.2 6.6a8.2 8.2 0 0 1 0 10.8"/></svg>`,
+
+    soundOff: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M3.4 9.2h3.6L11.8 5v14L7 14.8H3.4z" fill="currentColor"/>
+        <path d="M15.6 9.6l5.2 5.2M20.8 9.6l-5.2 5.2"/></svg>`,
+
+    book: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2.6 4.8h5.8a3.4 3.4 0 0 1 3.6 3.2v11.6a2.8 2.8 0 0 0-2.8-2.2H2.6z"/>
+        <path d="M21.4 4.8h-5.8a3.4 3.4 0 0 0-3.6 3.2v11.6a2.8 2.8 0 0 1 2.8-2.2h6.6z"/></svg>`,
+
+    spark: `<svg class="icon" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor"
+        stroke-width="1.4" stroke-linejoin="round">
+        <path d="M10 1.8 12.1 7.5 17.8 9.6 12.1 11.7 10 17.4 7.9 11.7 2.2 9.6 7.9 7.5z"/>
+        <path d="M18.4 14.2 19.4 16.9 22.1 17.9 19.4 18.9 18.4 21.6 17.4 18.9 14.7 17.9 17.4 16.9z"/></svg>`
+};
+
+/* ============================================================
+   HAND ARTWORK — anime / manga line art
+   Flat skin, one hard cel shadow, clean ink outline, nails.
+   Light source is upper-right, so shadows always fall left.
+   ============================================================ */
+const PALETTE = {
+    p1: {
+        skin: '#FFDCC0', shade: '#F7CFAC', line: '#4A373A',
+        nail: '#FFC6B6', nailLine: '#C98B80',
+        cuff: '#F7F1E6', cuffShade: '#DED3C2',   // bandage wraps
+        style: 'wrap'
+    },
+    p2: {
+        skin: '#FFE7D4', shade: '#F6DAC2', line: '#40323F',
+        nail: '#3E3350', nailLine: '#241C31',    // dark painted nails
+        cuff: '#4C4568', cuffShade: '#332E49',   // fingerless glove
+        style: 'glove'
+    },
+    out: {
+        skin: '#DBD6DE', shade: '#CDC7D3', line: '#6B6377',
+        nail: '#C6BFCD', nailLine: '#9990A3',
+        cuff: '#E7E3EB', cuffShade: '#D2CDD8',
+        style: 'wrap'
+    }
+};
+
+/* Canonical right hand; left hands are mirrored.
+   Proportions follow the construction sketch: the middle finger is
+   about as long as the palm, and each finger splits half / half again. */
+const FINGERS = [
+    { x: 62.7, baseY: 66, tipY: 11, w: 12.5, lean:  8 },  // index
+    { x: 49.6, baseY: 60, tipY:  0, w: 13.5, lean:  2 },  // middle
+    { x: 36.3, baseY: 62, tipY:  7, w: 13.0, lean: -5 },  // ring
+    { x: 24.0, baseY: 70, tipY: 27, w: 11.5, lean:-13 }   // pinky
+];
+
+/* Three line weights, as in the reference: a heavier silhouette, lighter
+   interior lines, and hairline detail. */
+const LW = { outer: 1.9, inner: 1.65, mid: 1.0, fine: 0.7 };
+
+/* ------------------------------------------------------------------
+   The hand is ONE continuous outline — palm, fingers, webbing and
+   thumb are a single path, so nothing overlaps or sits "on top of"
+   anything else. Details (nails, creases) are drawn inside it.
+   ------------------------------------------------------------------ */
+
+let uid = 0;
+
+function rotPt(x, y, cx, cy, deg) {
+    const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    const dx = x - cx, dy = y - cy;
+    return `${(cx + dx * c - dy * s).toFixed(2)} ${(cy + dx * s + dy * c).toFixed(2)}`;
+}
+
+function celShape(id, d, shadowD, P, lineWidth) {
+    return `
+        <clipPath id="${id}"><path d="${d}"/></clipPath>
+        <path d="${d}" fill="${P.skin}"/>
+        ${shadowD ? `<g clip-path="url(#${id})"><path d="${shadowD}" fill="${P.shade}"/></g>` : ''}
+        <path d="${d}" fill="none" stroke="${P.line}" stroke-width="${lineWidth}" stroke-linejoin="round"/>`;
+}
+
+function nailShape(cx, top, w, h) {
+    return `M ${cx - w / 2} ${top + h * 0.5}
+            C ${cx - w / 2} ${top - h * 0.32}, ${cx + w / 2} ${top - h * 0.32}, ${cx + w / 2} ${top + h * 0.5}
+            C ${cx + w / 2} ${top + h * 0.98}, ${cx - w / 2} ${top + h * 0.98}, ${cx - w / 2} ${top + h * 0.5} Z`;
+}
+
+/* fingers left-to-right, carrying their index so we know which are raised */
+function handSlots() {
+    return FINGERS.map((f, i) => ({ f, i })).sort((a, b) => a.f.x - b.f.x);
+}
+
+function handOutline(value, dead) {
+    const slots = handSlots();
+    const raised = k => !dead && k < value;
+
+    // wrist, then up the outside of the palm
+    let d = `M 33 136 L 32 120 C 21 108, 13 88, 18 72`;
+
+    slots.forEach((s, n) => {
+        const f = s.f, hb = f.w / 2, ht = hb * 0.8, mid = (f.baseY + f.tipY) / 2;
+        const cx = f.x, cy = f.baseY + 10;
+        const R = (x, y) => rotPt(x, y, cx, cy, f.lean);
+        const up = raised(s.i);
+
+        const Lb = up ? R(f.x - hb, f.baseY + 2) : `${f.x - hb} ${f.baseY + 2}`;
+        const Rb = up ? R(f.x + hb, f.baseY + 2) : `${f.x + hb} ${f.baseY + 2}`;
+
+        // webbing dips between neighbours; the first finger joins the palm edge
+        if (n === 0) d += ` L ${Lb}`;
+        else {
+            const prev = slots[n - 1].f;
+            const vx = ((prev.x + prev.w / 2) + (f.x - hb)) / 2;
+            const vy = (prev.baseY + f.baseY) / 2 + 6;
+            d += ` Q ${vx.toFixed(1)} ${vy.toFixed(1)} ${Lb}`;
+        }
+
+        if (up) {
+            d += ` C ${R(f.x - hb, mid + 8)}, ${R(f.x - ht - .6, mid - 8)}, ${R(f.x - ht, f.tipY + ht)}` +
+                 ` A ${ht.toFixed(2)} ${ht.toFixed(2)} 0 0 1 ${R(f.x + ht, f.tipY + ht)}` +
+                 ` C ${R(f.x + ht + .6, mid - 8)}, ${R(f.x + hb, mid + 8)}, ${Rb}`;
+        } else {
+            d += ` Q ${f.x} ${f.baseY - 13} ${Rb}`;
+        }
+    });
+
+    // out of the index, across the web, around the thumb, back to the wrist
+    d += dead
+        // curled in against the fist, matching the folded fingers
+        ? ` C 73 76, 75 82, 76 88` +
+          ` C 81 86, 86 89, 86 95` +
+          ` C 86 102, 81 108, 77 113` +
+          ` C 75 120, 73 127, 72 132` +
+          ` L 70 136 Z`
+        : ` C 73 76, 74 83, 76 90` +
+          ` C 81 82, 86 72, 90 62` +
+          ` C 93 56, 99 58, 98 66` +
+          ` C 97 74, 91 86, 85 96` +
+          ` C 81 106, 74 124, 72 132` +
+          ` L 70 136 Z`;
+    return d;
+}
+
+function fingerDetails(f, P) {
+    const hb = f.w / 2, ht = hb * 0.8;
+    const span = f.baseY + 12 - f.tipY;
+    const j1 = f.tipY + span * 0.32, j2 = f.tipY + span * 0.63;
+    const nw = ht * 1.16, nh = ht * 1.5, nt = f.tipY + ht * 0.36;
+    return `
+    <g transform="rotate(${f.lean} ${f.x} ${f.baseY + 10})">
+        <path d="M ${f.x - ht * 0.74} ${j1} q ${(ht * 0.74).toFixed(1)} 3.2 ${(ht * 1.48).toFixed(1)} 0"
+              fill="none" stroke="${P.line}" stroke-width="${LW.mid}" stroke-linecap="round" opacity=".55"/>
+        <path d="M ${f.x - ht * 0.68} ${j2} q ${(ht * 0.68).toFixed(1)} 3 ${(ht * 1.36).toFixed(1)} 0"
+              fill="none" stroke="${P.line}" stroke-width="${LW.fine}" stroke-linecap="round" opacity=".4"/>
+        <path d="${nailShape(f.x, nt, nw, nh)}" fill="${P.nail}" stroke="${P.nailLine}"
+              stroke-width="${LW.fine}" stroke-linejoin="round"/>
+        <path d="M ${f.x - nw * 0.22} ${nt + nh * 0.26} q ${(nw * 0.2).toFixed(1)} -2 ${(nw * 0.36).toFixed(1)} 0"
+              fill="none" stroke="#ffffff" stroke-width="${LW.mid}" stroke-linecap="round" opacity=".6"/>
+    </g>`;
+}
+
+function knuckleCrease(f, P) {
+    const hb = f.w / 2;
+    return `<path d="M ${f.x - hb * 0.5} ${f.baseY - 1} q ${(hb * 0.5).toFixed(1)} 2.8 ${hb.toFixed(1)} 0"
+                  fill="none" stroke="${P.line}" stroke-width="${LW.mid}" stroke-linecap="round" opacity=".32"/>`;
+}
+
+function drawCuff(P) {
+    if (P.style === 'glove') {
+        return `
+        <clipPath id="cf${uid}"><path d="M 31 124 L 72 124 L 70 158 L 33 158 Z"/></clipPath>
+        <path d="M 31 124 L 72 124 L 70 158 L 33 158 Z" fill="${P.cuff}"/>
+        <g clip-path="url(#cf${uid})"><path d="M 22 118 L 46 118 L 42 162 L 22 162 Z" fill="${P.cuffShade}"/></g>
+        <path d="M 31 124 L 72 124 L 70 158 L 33 158 Z" fill="none" stroke="${P.line}" stroke-width="${LW.outer}" stroke-linejoin="round"/>
+        <circle cx="51" cy="140" r="6.5" fill="none" stroke="#ffffff" stroke-width="1.4" opacity=".7"/>
+        <path d="M 51 134.5 L 51 145.5 M 45.5 140 L 56.5 140" stroke="#ffffff" stroke-width="${LW.mid}" opacity=".55"/>`;
+    }
+    let bands = '';
+    [[124, 133], [135, 144], [146, 155]].forEach(([a, b], i) => {
+        bands += `
+        <path d="M ${31 - i * 0.6} ${a} L ${72 + i * 0.6} ${a - 3} L ${71 + i * 0.6} ${b - 3} L ${32 - i * 0.6} ${b} Z"
+              fill="${P.cuff}" stroke="${P.line}" stroke-width="${LW.outer}" stroke-linejoin="round"/>
+        <path d="M ${32 - i * 0.6} ${a + 1.8} L 44 ${a + 0.9} L 43 ${b - 1.4} L ${33 - i * 0.6} ${b - 0.6} Z"
+              fill="${P.cuffShade}" opacity=".95"/>`;
+    });
+    return bands;
+}
+
+function renderHand(value, side, who, opts = {}) {
+    uid++;
+    const dead = value === 0;                                   // shape: everything curled
+    const ko = opts.ko !== undefined ? opts.ko : dead;           // grey + cross-eyes
+    const P = ko ? PALETTE.out : PALETTE[who];
+
+    const outline = handOutline(value, dead);
+    const shadow = `M 2 26 L 27 26 C 23 66, 21 108, 17 152 L 2 152 Z`;
+
+    let details = '';
+    FINGERS.forEach((f, i) => {
+        details += (!dead && i < value) ? fingerDetails(f, P) : knuckleCrease(f, P);
+    });
+
+    const thumbDetail = dead
+        ? `<path d="M 77 92 q 4 3 7 -1" fill="none" stroke="${P.line}"
+                 stroke-width="${LW.mid}" stroke-linecap="round" opacity=".4"/>`
+        : `<path d="M 81 85 q 4.5 3 8 -1.8" fill="none" stroke="${P.line}"
+                 stroke-width="${LW.mid}" stroke-linecap="round" opacity=".5"/>
+           <path d="${nailShape(93, 63, 8, 9.5)}" fill="${P.nail}" stroke="${P.nailLine}"
+                 stroke-width="${LW.fine}" stroke-linejoin="round" transform="rotate(36 93 68)"/>`;
+
+    const tendons = `M 42 108 C 41 96, 42 86, 43 80
+                     M 56 108 C 56 96, 57 86, 58 82`;
+
+    const koMarks = ko ? `
+        <path d="M 36 94 l 8 8 M 44 94 l -8 8" stroke="${P.line}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>
+        <path d="M 55 92 l 8 8 M 63 92 l -8 8" stroke="${P.line}" stroke-width="1.6" stroke-linecap="round" opacity=".45"/>
+        <path d="M 14 32 q 7 -10 14 -4 M 78 26 q 7 -9 13 -2" fill="none" stroke="${P.line}"
+              stroke-width="${LW.mid}" stroke-linecap="round" opacity=".26"/>` : '';
+
+    const body = `
+        ${drawCuff(P)}
+        ${celShape(`hd${uid}`, outline, shadow, P, LW.outer)}
+        <path d="${tendons}" fill="none" stroke="${P.line}" stroke-width="${LW.fine}" stroke-linecap="round" opacity=".18"/>
+        ${details}
+        ${thumbDetail}
+        ${koMarks}`;
+
+    const mirrored = who === 'p2' ? side === 'left' : side === 'right';
+    const flip = mirrored ? '<g transform="translate(106,0) scale(-1,1)">' : '<g>';
+    const tilt = ko ? ' style="transform:rotate(7deg)"' : '';
+
+    return `
+    <svg viewBox="2 -8 102 176" class="hand-art" preserveAspectRatio="xMidYMid meet"${tilt}
+         style="animation-delay:${(uid % 4) * 0.45}s">
+        ${flip}${body}</g>
+    </svg>`;
+}
+
+/* ============================================================
+   CHARACTER PORTRAITS — same cel-shaded treatment as the hands
+   ============================================================ */
+const PORTRAITS = {
+    hero: {
+        bg: '#CDEAFF', hair: '#46334F', hair2: '#2E2035', skin: '#FFDCC0', shade: '#F0B892',
+        cloth: '#2FA8E0', cloth2: '#1C82B4', eye: '#2FA8E0', ink: '#241F2E', trim: '#F4B32C'
+    },
+    rival: {
+        bg: '#FFD8E0', hair: '#DACEF0', hair2: '#AC99D6', skin: '#FFE7D4', shade: '#EEC3A6',
+        cloth: '#4C4568', cloth2: '#312C46', eye: '#F0607D', ink: '#241F2E', trim: '#F0607D'
+    },
+    momo: {
+        bg: '#D9F5E6', hair: '#4FC9B0', hair2: '#2A9C86', skin: '#FFDCC0', shade: '#F7CFAC',
+        cloth: '#F4B32C', cloth2: '#C98F1C', eye: '#2A9C86', ink: '#241F2E', trim: '#FFF1C4'
+    },
+    yurei: {
+        bg: '#E6E2EF', hair: '#F3EEF9', hair2: '#C6BDD9', skin: '#FFF1E8', shade: '#EBD8CA',
+        cloth: '#2A2434', cloth2: '#181321', eye: '#E0476B', ink: '#1A1524', trim: '#E0476B'
+    },
+    player2: {
+        bg: '#C9F2E4', hair: '#E2703A', hair2: '#B94F24', skin: '#FFDCC0', shade: '#F0B892',
+        cloth: '#34C79A', cloth2: '#1F9576', eye: '#2C8F6F', ink: '#241F2E', trim: '#FFF1C4'
+    }
+};
+
+let pid = 0;
+
+function pShape(id, d, shadowD, fill, shade, ink, lw) {
+    return `
+        <clipPath id="${id}"><path d="${d}"/></clipPath>
+        <path d="${d}" fill="${fill}"/>
+        ${shadowD ? `<g clip-path="url(#${id})"><path d="${shadowD}" fill="${shade}"/></g>` : ''}
+        <path d="${d}" fill="none" stroke="${ink}" stroke-width="${lw}" stroke-linejoin="round"/>`;
+}
+
+const FACE_D = `M 17 28 C 17 15, 47 15, 47 28 C 47 39, 41 48, 32 48 C 23 48, 17 39, 17 28 Z`;
+const BODY_D = `M 2 64 C 4 55, 17 50, 32 50 C 47 50, 60 55, 62 64 Z`;
+
+function pEye(cx, cy, P, sharp = false) {
+    const w = 4.3, h = sharp ? 4.0 : 5.2;
+    const lid = `
+        <g class="lid">
+            <rect x="${cx - w - 1.6}" y="${cy - h - 2.6}" width="${(w + 1.6) * 2}" height="${h * 1.9}" fill="${P.skin}"/>
+            <path d="M ${cx - w - 1} ${cy + h * 0.28} q ${w + 1} 2.6 ${(w + 1) * 2} 0"
+                  fill="none" stroke="${P.ink}" stroke-width="1.8" stroke-linecap="round"/>
+        </g>`;
+    return `
+        <ellipse cx="${cx}" cy="${cy}" rx="${w}" ry="${h}" fill="#ffffff" stroke="${P.ink}" stroke-width="1.1"/>
+        <ellipse cx="${cx}" cy="${cy + 0.6}" rx="${w * 0.78}" ry="${h * 0.84}" fill="${P.eye}"/>
+        <ellipse cx="${cx}" cy="${cy + 1}" rx="${w * 0.4}" ry="${h * 0.46}" fill="${P.ink}"/>
+        <circle cx="${cx + w * 0.4}" cy="${cy - h * 0.4}" r="${w * 0.33}" fill="#ffffff"/>
+        <ellipse cx="${cx - w * 0.36}" cy="${cy + h * 0.44}" rx="${w * 0.2}" ry="${h * 0.16}" fill="#ffffff" opacity=".8"/>
+        <path d="M ${cx - w - 1.4} ${cy - h * 0.46} Q ${cx} ${cy - h - 3} ${cx + w + 1.4} ${cy - h * 0.46}"
+              fill="none" stroke="${P.ink}" stroke-width="1.7" stroke-linecap="round"/>
+        ${lid}`;
+}
+
+function pBase(P, n) {
+    return `
+        <path d="M 26 39 L 26 51 Q 32 56 38 51 L 38 39 Z" fill="${P.shade}" stroke="${P.ink}" stroke-width="1.8" stroke-linejoin="round"/>
+        ${pShape(`pb${n}`, BODY_D, `M -3 44 L 23 44 L 16 68 L -3 68 Z`, P.cloth, P.cloth2, P.ink, 1.8)}
+        ${pShape(`pf${n}`, FACE_D, `M 7 8 L 25 8 L 20 54 L 7 54 Z`, P.skin, P.shade, P.ink, 1.8)}`;
+}
+
+function portraitHero(P, n) {
+    return `
+        <path d="M 15 29 C 13 11, 23 3, 32 3 C 42 3, 51 11, 49 29
+                 C 47 21, 42 17, 32 17 C 22 17, 17 21, 15 29 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 21 27.5 q 4.5 -2.6 8 -.6 M 43 27.5 q -4.5 -2.6 -8 -.6"
+              fill="none" stroke="${P.ink}" stroke-width="1.5" stroke-linecap="round"/>
+        ${pEye(24.5, 34, P)}
+        ${pEye(39.5, 34, P)}
+        <path d="M 27.5 42 q 4.5 4.2 9 0" fill="none" stroke="${P.ink}" stroke-width="1.7" stroke-linecap="round"/>
+        <g clip-path="url(#pf${n})">
+            <ellipse cx="22" cy="39" rx="3.4" ry="2" fill="${P.trim}" opacity=".4"/>
+            <ellipse cx="42" cy="39" rx="3.4" ry="2" fill="${P.trim}" opacity=".4"/>
+        </g>
+        <path d="M 15 30 C 14 11, 23 4, 32 4 C 41 4, 50 11, 49 30
+                 C 47.5 23, 46 19.5, 44 18
+                 C 44.5 22, 44 25.5, 43 28
+                 C 41 22, 37.5 18.5, 34 17.5
+                 C 35 21, 34.5 25, 33.5 28
+                 C 31 21.5, 27 18.5, 23.5 18.5
+                 C 24.5 22, 24 25.5, 23 28.5
+                 C 21 23, 18 21, 15.8 21.5 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 20.5 12.5 C 24 9, 30 7.5, 34 8.5 L 32.5 12 C 28.5 11.4, 24 12.6, 21.5 15 Z"
+              fill="${P.trim}" stroke="${P.ink}" stroke-width="1.6" stroke-linejoin="round" opacity=".95"/>`;
+}
+
+function portraitRival(P, n) {
+    return `
+        <path d="M 11 58 C 9 20, 20 2, 32 2 C 44 2, 55 20, 53 58
+                 L 45 54 C 47 36, 46 24, 43 17
+                 C 38 24, 26 24, 21 17
+                 C 18 24, 17 36, 19 54 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 22 26.5 q 4.5 -1.6 8 .4 M 42 26.5 q -4.5 -1.6 -8 .4"
+              fill="none" stroke="${P.ink}" stroke-width="1.5" stroke-linecap="round"/>
+        ${pEye(24.5, 34, P, true)}
+        ${pEye(39.5, 34, P, true)}
+        <path d="M 27 43 q 5 2.4 8.5 -1.8" fill="none" stroke="${P.ink}" stroke-width="1.7" stroke-linecap="round"/>
+        <path d="M 14 32 C 14 12, 23 4, 32 4 C 41 4, 50 12, 50 29
+                 C 47 21, 42 17, 34 18.5
+                 C 34.5 23, 34 26.5, 33.5 30
+                 C 31 21, 24 18.5, 18 22
+                 C 17 26, 15.5 30, 14.5 35 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 50 30 C 51.5 38, 51 47, 49.5 54 L 55 55 C 56 45, 54.5 34, 52.5 28 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.9" stroke-linejoin="round"/>
+        <path d="M 22 50 C 26 53, 38 53, 42 50 L 44 58 L 20 58 Z"
+              fill="${P.cloth2}" stroke="${P.ink}" stroke-width="1.9" stroke-linejoin="round"/>`;
+}
+
+function portraitPlayer2(P, n) {
+    return `
+        <path d="M 46 18 C 58 14, 64 24, 61 34 C 58 44, 49 45, 44 39 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 14 34 C 12 12, 23 3, 32 3 C 42 3, 52 12, 50 34
+                 C 48 24, 43 18, 32 18 C 21 18, 16 24, 14 34 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 21 27.5 q 4.5 -2.4 8 -.4 M 43 27.5 q -4.5 -2.4 -8 -.4"
+              fill="none" stroke="${P.ink}" stroke-width="1.5" stroke-linecap="round"/>
+        ${pEye(24.5, 34, P)}
+        ${pEye(39.5, 34, P)}
+        <path d="M 26.5 41 q 5.5 5 11 0" fill="none" stroke="${P.ink}" stroke-width="1.7" stroke-linecap="round"/>
+        <g clip-path="url(#pf${n})" fill="${P.hair2}" opacity=".7">
+            <circle cx="22.5" cy="38.5" r="1"/><circle cx="25.5" cy="40.5" r=".9"/>
+            <circle cx="41.5" cy="38.5" r="1"/><circle cx="38.5" cy="40.5" r=".9"/>
+        </g>
+        <path d="M 15 30 C 14 11, 23 4, 32 4 C 41 4, 50 11, 49 30
+                 C 47.5 21, 43 16.5, 36 16.5
+                 C 33 21, 32.5 25, 32.5 28.5
+                 C 30 20, 23 18.5, 15.5 24 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>`;
+}
+
+/* cheerful, hopeless — the easy rival */
+function portraitMomo(P, n) {
+    return `
+        <path d="M 40 12 C 48 2, 60 4, 60 14 C 60 21, 52 24, 46 21 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 14 34 C 12 12, 23 3, 32 3 C 42 3, 52 12, 50 34
+                 C 48 24, 43 18, 32 18 C 21 18, 16 24, 14 34 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 21 27 q 4.5 -2.8 8 -.6 M 43 27 q -4.5 -2.8 -8 -.6"
+              fill="none" stroke="${P.ink}" stroke-width="1.5" stroke-linecap="round"/>
+        ${pEye(24.5, 34, P)}
+        ${pEye(39.5, 34, P)}
+        <path d="M 26 41 q 6 6.5 12 0" fill="none" stroke="${P.ink}" stroke-width="1.7" stroke-linecap="round"/>
+        <g clip-path="url(#pf${n})">
+            <ellipse cx="21.5" cy="39" rx="3.4" ry="2" fill="${P.eye}" opacity=".22"/>
+            <ellipse cx="42.5" cy="39" rx="3.4" ry="2" fill="${P.eye}" opacity=".22"/>
+        </g>
+        <path d="M 15 30 C 14 11, 23 4, 32 4 C 41 4, 50 11, 49 30
+                 C 47 21, 42 16.5, 34 17
+                 C 30 20, 28 24, 27.5 28
+                 C 25 19, 19 18, 15 25 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 43 10 L 45.6 15.2 51 16.4 47.2 20 47.9 25.4 43 22.8 38.1 25.4 38.8 20 35 16.4 40.4 15.2 Z"
+              fill="${P.trim}" stroke="${P.ink}" stroke-width="1.5" stroke-linejoin="round"/>`;
+}
+
+/* the final boss */
+function portraitYurei(P, n) {
+    return `
+        <path d="M 10 60 C 7 20, 19 1, 32 1 C 45 1, 56 20, 54 60
+                 L 45 55 C 47 35, 46 22, 43 16
+                 C 38 24, 26 24, 21 16
+                 C 18 24, 17 37, 19 55 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 44 27 q -4.5 -1.4 -8 .8" fill="none" stroke="${P.ink}" stroke-width="1.6" stroke-linecap="round"/>
+        ${pEye(39.5, 34, P, true)}
+        <path d="M 28 44 q 5 -1 8.5 .6" fill="none" stroke="${P.ink}" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M 13 36 C 13 11, 23 3, 32 3 C 42 3, 51 11, 51 28
+                 C 48 19, 43 15, 35 17
+                 C 33 23, 32 28, 31.5 33
+                 C 27 21, 19 20, 13.5 30
+                 C 13 33, 13 35, 13 40 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 51 28 C 52.5 37, 52 48, 50.5 56 L 56 57 C 57 46, 55.5 34, 53.5 26 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M 21 50 C 26 54, 38 54, 43 50 L 45 59 L 19 59 Z"
+              fill="${P.cloth2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>`;
+}
+
+const SWEAT = `<g class="sweat">
+    <path d="M 52 17 C 55.5 22, 56.5 25, 54 27 C 51 28.5, 48.6 26, 49.6 23 C 50.2 21, 51 19, 52 17 Z"
+          fill="#8ed0ff" stroke="#241f2e" stroke-width="1.4" stroke-linejoin="round"/>
+    <path d="M 51.6 21.5 q 1 1.6 .4 3" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" opacity=".8"/>
+</g>`;
+
+function renderPortrait(kind) {
+    const n = ++pid;
+    const P = PORTRAITS[kind];
+    const art = kind === 'rival' ? portraitRival(P, n)
+              : kind === 'player2' ? portraitPlayer2(P, n)
+              : kind === 'momo' ? portraitMomo(P, n)
+              : kind === 'yurei' ? portraitYurei(P, n)
+              : portraitHero(P, n);
+    return `<svg viewBox="0 0 64 64" class="portrait" style="--blink-delay:${(n % 5) * 1.4}s">
+        <rect width="64" height="64" fill="${P.bg}"/>${art}${SWEAT}</svg>`;
+}
+
+/* ============================================================
+   EFFECTS
+   ============================================================ */
+const canvas = document.getElementById('fx-canvas');
+const ctx = canvas.getContext('2d');
+let confetti = [];
+
+function sizeCanvas() { canvas.width = innerWidth; canvas.height = innerHeight; }
+addEventListener('resize', sizeCanvas);
+sizeCanvas();
+
+function burstConfetti(x, y, colors, count = 70) {
+    for (let i = 0; i < count; i++) {
+        const a = Math.random() * Math.PI * 2, s = Math.random() * 7 + 2;
+        confetti.push({
+            x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 3,
+            size: Math.random() * 5 + 3, life: 1,
+            color: colors[(Math.random() * colors.length) | 0],
+            rot: Math.random() * Math.PI, spin: Math.random() * .34 - .17
+        });
+    }
+}
+
+function tick() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let i = confetti.length - 1; i >= 0; i--) {
+        const c = confetti[i];
+        c.x += c.vx; c.y += c.vy; c.vy += .26; c.vx *= .99;
+        c.life -= .011; c.rot += c.spin;
+        if (c.life <= 0) { confetti.splice(i, 1); continue; }
+        ctx.save();
+        ctx.translate(c.x, c.y); ctx.rotate(c.rot);
+        ctx.globalAlpha = Math.max(0, c.life);
+        ctx.fillStyle = c.color;
+        ctx.fillRect(-c.size / 2, -c.size / 2, c.size, c.size * 1.5);
+        ctx.restore();
+    }
+    ctx.globalAlpha = 1;
+    requestAnimationFrame(tick);
+}
+tick();
+
+function flashSpeedlines() {
+    const el = document.getElementById('speedlines');
+    el.classList.remove('go');
+    void el.offsetWidth;
+    el.classList.add('go');
+}
+
+function impactFreeze(then, ms = 90) {
+    const field = document.getElementById('field');
+    const flash = document.getElementById('whiteflash');
+    field.classList.add('freeze');
+    flash.classList.remove('go');
+    void flash.offsetWidth;
+    flash.classList.add('go');
+    setTimeout(() => { field.classList.remove('freeze'); if (then) then(); }, ms);
+}
+
+function quake() {
+    const f = document.getElementById('field');
+    f.classList.add('quake');
+    setTimeout(() => f.classList.remove('quake'), 300);
+}
+
+function centerOf(id) {
+    const r = document.getElementById(id).getBoundingClientRect();
+    return [r.left + r.width / 2, r.top + r.height / 2];
+}
+
+function popBurst(targetId, text, kind) {
+    const [x, y] = centerOf(targetId);
+    const el = document.createElement('div');
+    el.className = 'burst';
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    el.innerHTML = kind === 'star'
+        ? `<div class="star"><span>${text}</span></div>`
+        : `<div class="tag" style="color:${kind}">${text}</div>`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 1000);
+}
+
+/* ============================================================
+   SOUND — synthesised manga fight effects
+   Layered whooshes, impacts, blade rings and sparkle cascades rather
+   than plain beeps.
+   ============================================================ */
+const AC = window.AudioContext || window.webkitAudioContext;
+let audioCtx = null, master = null, noiseBuf = null, soundEnabled = true;
+
+function audioNow() {
+    if (!audioCtx) {
+        audioCtx = new AC();
+        master = audioCtx.createGain();
+        master.gain.value = .85;
+        const comp = audioCtx.createDynamicsCompressor();
+        comp.threshold.value = -6;
+        comp.knee.value = 6;
+        comp.ratio.value = 4;
+        master.connect(comp);
+        comp.connect(audioCtx.destination);
+        const len = Math.floor(audioCtx.sampleRate * 1.2);
+        noiseBuf = audioCtx.createBuffer(1, len, audioCtx.sampleRate);
+        const d = noiseBuf.getChannelData(0);
+        for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    return audioCtx.currentTime;
+}
+
+function tone(t0, { freq, to, dur = .2, type = 'sine', vol = .2, at = 0 }) {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain(), s = t0 + at;
+    o.type = type;
+    o.frequency.setValueAtTime(freq, s);
+    if (to) o.frequency.exponentialRampToValueAtTime(Math.max(to, 1), s + dur);
+    g.gain.setValueAtTime(.0001, s);
+    g.gain.exponentialRampToValueAtTime(vol, s + .005);
+    g.gain.exponentialRampToValueAtTime(.0001, s + dur);
+    o.connect(g); g.connect(master);
+    o.start(s); o.stop(s + dur + .02);
+}
+
+function hiss(t0, { dur = .2, from = 2000, to = 500, q = 1.2, vol = .3, at = 0, type = 'bandpass' }) {
+    const n = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(),
+          g = audioCtx.createGain(), s = t0 + at;
+    n.buffer = noiseBuf; n.loop = true;
+    f.type = type; f.Q.value = q;
+    f.frequency.setValueAtTime(from, s);
+    f.frequency.exponentialRampToValueAtTime(Math.max(to, 20), s + dur);
+    g.gain.setValueAtTime(.0001, s);
+    g.gain.exponentialRampToValueAtTime(vol, s + .008);
+    g.gain.exponentialRampToValueAtTime(.0001, s + dur);
+    n.connect(f); f.connect(g); g.connect(master);
+    n.start(s); n.stop(s + dur + .02);
+}
+
+/* inharmonic partials — metal, not a musical note */
+function clang(t0, { base = 420, vol = .16, dur = .5, at = 0 }) {
+    [1, 1.47, 2.09, 2.71, 3.36].forEach((m, i) =>
+        tone(t0, { freq: base * m, dur: dur * (1 - i * .13), type: 'sine', vol: vol / (i * .9 + 1), at }));
+}
+
+/* Vowel formants — a buzzing glottal source filtered to these lands
+   somewhere near a human voice, which is enough for a shout or a grunt. */
+const VOWELS = {
+    ah: [820, 1300, 2700],   // "hah!"
+    uh: [610, 1000, 2350],   // "ugh"
+    eh: [520, 1850, 2550],   // "heh"
+    oh: [480, 900, 2300]     // "oof"
+};
+
+function voice(t0, { vowel = 'ah', f0 = 220, bend = .72, dur = .26, vol = .5, at = 0, rough = 0, breath = .3 }) {
+    const s = t0 + at;
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(f0, s);
+    osc.frequency.exponentialRampToValueAtTime(Math.max(f0 * bend, 40), s + dur);
+
+    if (rough) {                       // growl in the throat
+        const lfo = audioCtx.createOscillator(), lg = audioCtx.createGain();
+        lfo.type = 'sine';
+        lfo.frequency.value = 26 + Math.random() * 10;
+        lg.gain.value = rough;
+        lfo.connect(lg); lg.connect(osc.frequency);
+        lfo.start(s); lfo.stop(s + dur);
+    }
+
+    const src = audioCtx.createGain();
+    src.gain.setValueAtTime(.0001, s);
+    src.gain.exponentialRampToValueAtTime(1, s + .022);
+    src.gain.setValueAtTime(1, s + dur * .45);
+    src.gain.exponentialRampToValueAtTime(.0001, s + dur);
+    osc.connect(src);
+
+    const out = audioCtx.createGain();
+    out.gain.value = vol;
+    VOWELS[vowel].forEach((f, i) => {
+        const bp = audioCtx.createBiquadFilter();
+        bp.type = 'bandpass';
+        bp.frequency.value = f;
+        bp.Q.value = 9 - i * 2.5;
+        const g = audioCtx.createGain();
+        g.gain.value = [1, .6, .28][i];
+        src.connect(bp); bp.connect(g); g.connect(out);
+    });
+    out.connect(master);
+
+    if (breath) hiss(t0, { dur: .07, from: 1100, to: 3200, q: .7, vol: vol * breath, at });
+
+    osc.start(s); osc.stop(s + dur + .02);
+}
+
+/* Blade through air, then the steel sings. */
+function swordSlash(t0, { at = 0, vol = .45, bright = 1, ring = .35 }) {
+    hiss(t0, { dur: .07, from: 700, to: 5400 * bright, q: 1.7, vol: vol * .85, at });
+    hiss(t0, { dur: .15, from: 5400 * bright, to: 800, q: 2.2, vol: vol * .7, at: at + .055 });
+    clang(t0, { base: 2150 * bright, vol: vol * ring, dur: .6, at: at + .05 });
+    tone(t0, { freq: 3500 * bright, to: 2100, dur: .34, type: 'triangle', vol: vol * ring * .6, at: at + .05 });
+}
+
+const vary = (n = .12) => 1 + (Math.random() * 2 - 1) * n;
+
+const SFX = {
+    tap: t => tone(t, { freq: 1500, to: 900, dur: .07, type: 'triangle', vol: .7 }),
+
+    select: t => {
+        tone(t, { freq: 700, to: 1150, dur: .11, type: 'triangle', vol: .75 });
+        tone(t, { freq: 1400, to: 2100, dur: .08, type: 'sine', vol: .3, at: .02 });
+    },
+
+    /* the swing: blade through air plus a kiai */
+    swing: t => {
+        swordSlash(t, { vol: .42, bright: vary(.14) });
+        voice(t, { vowel: 'ah', f0: 250 * vary(.1), bend: .62, dur: .2, vol: .5, at: .02, rough: 6 });
+    },
+
+    /* contact on a hand that survives */
+    hit: t => {
+        hiss(t, { dur: .1, from: 2400, to: 240, q: .8, vol: .46 });
+        tone(t, { freq: 180 * vary(.1), to: 46, dur: .24, type: 'sine', vol: .78 });
+        tone(t, { freq: 128, to: 62, dur: .16, type: 'square', vol: .22 });
+        voice(t, { vowel: 'uh', f0: 190 * vary(.12), bend: .6, dur: .16, vol: .46, at: .03, rough: 9, breath: .18 });
+    },
+
+    /* the finisher: deep boom, steel, and someone going down */
+    ko: t => {
+        swordSlash(t, { vol: .4, bright: 1.25, ring: .5 });
+        tone(t, { freq: 240, to: 30, dur: .55, type: 'sine', vol: .52, at: .07 });
+        hiss(t, { dur: .3, from: 5000, to: 280, q: .6, vol: .32, at: .07 });
+        clang(t, { base: 300, vol: .2, dur: .85, at: .07 });
+        tone(t, { freq: 88, to: 40, dur: .7, type: 'triangle', vol: .24, at: .12 });
+        voice(t, { vowel: 'oh', f0: 165 * vary(.12), bend: .42, dur: .42, vol: .48, at: .09, rough: 14, breath: .22 });
+    },
+
+    /* scissors: a clean draw-cut */
+    slash: t => {
+        swordSlash(t, { vol: .5, bright: 1.5, ring: .55 });
+        voice(t, { vowel: 'eh', f0: 265 * vary(.1), bend: .7, dur: .13, vol: .32, at: 0, rough: 4 });
+    },
+
+    /* spooling up a special */
+    charge: t => {
+        tone(t, { freq: 160, to: 900, dur: .5, type: 'sawtooth', vol: .24 });
+        tone(t, { freq: 320, to: 1800, dur: .5, type: 'square', vol: .11, at: .02 });
+        hiss(t, { dur: .5, from: 300, to: 4200, q: 1.6, vol: .18 });
+        voice(t, { vowel: 'eh', f0: 210, bend: 1.55, dur: .42, vol: .3, at: .04, rough: 7, breath: .12 });
+        tone(t, { freq: 1320, dur: .18, type: 'sine', vol: .26, at: .48 });
+    },
+
+    /* both hands at once */
+    blast: t => {
+        swordSlash(t, { vol: .4, bright: .9, ring: .3 });
+        swordSlash(t, { vol: .42, bright: 1.35, ring: .4, at: .09 });
+        voice(t, { vowel: 'ah', f0: 245, bend: .55, dur: .34, vol: .55, at: .02, rough: 11 });
+        tone(t, { freq: 300, to: 38, dur: .45, type: 'sawtooth', vol: .26, at: .16 });
+        tone(t, { freq: 110, to: 45, dur: .5, type: 'sine', vol: .34, at: .18 });
+        hiss(t, { dur: .34, from: 4200, to: 200, q: .5, vol: .3, at: .16 });
+    },
+
+    /* a hand coming back */
+    revive: t => {
+        [0, .07, .14, .21].forEach((d, i) =>
+            tone(t, { freq: 523.25 * Math.pow(2, i / 4), dur: .4, type: 'triangle', vol: .26, at: d }));
+        for (let i = 0; i < 9; i++)
+            tone(t, { freq: 1800 + Math.random() * 2600, dur: .12, type: 'sine', vol: .08, at: .05 + Math.random() * .4 });
+        voice(t, { vowel: 'eh', f0: 300, bend: 1.3, dur: .16, vol: .26, at: .02, breath: .2 });
+    },
+
+    dice: t => {
+        for (let i = 0; i < 8; i++)
+            hiss(t, { dur: .045, from: 2400 + Math.random() * 2200, to: 800, q: 2.4,
+                      vol: .3, at: i * .135 + Math.random() * .035 });
+        tone(t, { freq: 190, to: 85, dur: .18, type: 'square', vol: .32, at: 1.16 });
+    },
+
+    shift: t => {
+        hiss(t, { dur: .26, from: 400, to: 2600, q: 1.4, vol: .5 });
+        tone(t, { freq: 440, to: 880, dur: .2, type: 'triangle', vol: .6 });
+    },
+
+    win: t => {
+        voice(t, { vowel: 'ah', f0: 280, bend: 1.25, dur: .3, vol: .45, rough: 5 });
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) =>
+            tone(t, { freq: f, dur: i === 3 ? .7 : .18, type: 'square', vol: .16, at: .2 + i * .1 }));
+        [1318.5, 1567.98].forEach((f, i) =>
+            tone(t, { freq: f, dur: .6, type: 'triangle', vol: .12, at: .5 + i * .09 }));
+        for (let i = 0; i < 14; i++)
+            tone(t, { freq: 2000 + Math.random() * 3000, dur: .14, type: 'sine', vol: .045, at: .5 + Math.random() * .6 });
+    },
+
+    lose: t => {
+        voice(t, { vowel: 'oh', f0: 170, bend: .35, dur: .5, vol: .45, rough: 16, breath: .25 });
+        [440, 392, 330, 262].forEach((f, i) =>
+            tone(t, { freq: f, to: f * .94, dur: .34, type: 'sawtooth', vol: .15, at: .25 + i * .14 }));
+        tone(t, { freq: 120, to: 40, dur: .7, type: 'sine', vol: .3, at: .8 });
+        hiss(t, { dur: .5, from: 900, to: 120, q: .7, vol: .12, at: .8 });
+    }
+};
+
+function playSound(name) {
+    if (!soundEnabled) return;
+    (SFX[name] || SFX.tap)(audioNow());
+    if (DUCKERS[name]) duckMusic(DUCKERS[name], name === 'ko' || name === 'blast' ? .7 : .4);
+}
+
+/* ============================================================
+   MUSIC — a looping shonen-ish bed, mixed well under the effects
+   and ducked whenever something loud lands.
+   ============================================================ */
+const MUSIC_VOL = 0.115;
+const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
+
+const MOODS = {
+    /* driving shonen battle bed */
+    battle: {
+        bpm: 112,
+        prog: [{ bass: 45, notes: [57, 60, 64] },   // Am
+               { bass: 41, notes: [53, 57, 60] },   // F
+               { bass: 48, notes: [60, 64, 67] },   // C
+               { bass: 43, notes: [55, 59, 62] }],  // G
+        lead: { 0: 69, 6: 72, 10: 76, 16: 74, 22: 72, 26: 69, 32: 76, 38: 79, 42: 76, 48: 74, 54: 71, 58: 74 },
+        arp: .1, pad: .055, leadVol: .075, hats: true, kicks: [0, 8], bassEvery: 4
+    },
+    /* bright and triumphant */
+    victory: {
+        bpm: 128,
+        prog: [{ bass: 48, notes: [60, 64, 67] },   // C
+               { bass: 41, notes: [57, 60, 65] },   // F
+               { bass: 43, notes: [59, 62, 67] },   // G
+               { bass: 48, notes: [60, 64, 67] }],  // C
+        lead: { 0: 72, 4: 76, 8: 79, 12: 84, 16: 81, 20: 79, 24: 76, 32: 79, 36: 83, 40: 86, 48: 84, 56: 84 },
+        arp: .12, pad: .07, leadVol: .1, hats: true, kicks: [0, 6, 8, 14], bassEvery: 4
+    },
+    /* slow, sparse, minor */
+    defeat: {
+        bpm: 72,
+        prog: [{ bass: 45, notes: [57, 60, 64] },   // Am
+               { bass: 41, notes: [53, 57, 60] },   // F
+               { bass: 38, notes: [53, 57, 62] },   // Dm
+               { bass: 40, notes: [56, 59, 64] }],  // E
+        lead: { 0: 64, 12: 62, 16: 60, 28: 59, 32: 57, 44: 56, 48: 55, 60: 57 },
+        arp: 0, pad: .085, leadVol: .06, hats: false, kicks: [0], bassEvery: 8
+    }
+};
+
+let musicMood = 'battle';
+const mood = () => MOODS[musicMood];
+const stepDur = () => 60 / mood().bpm / 4;
+
+const ARP = [0, 1, 2, 1, 0, 2, 1, 2, 0, 1, 2, 1, 2, 1, 0, 1];
+
+let musicGain = null, musicOn = true, musicTimer = null, nextStepTime = 0, stepIndex = 0;
+
+function mTone(t, freq, dur, type, vol, cut) {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + .014);
+    g.gain.exponentialRampToValueAtTime(.0001, t + dur);
+    let tail = o;
+    if (cut) {
+        const f = audioCtx.createBiquadFilter();
+        f.type = 'lowpass'; f.frequency.value = cut;
+        o.connect(f); tail = f;
+    }
+    tail.connect(g); g.connect(musicGain);
+    o.start(t); o.stop(t + dur + .02);
+}
+
+function mHat(t, vol) {
+    const n = audioCtx.createBufferSource(), f = audioCtx.createBiquadFilter(), g = audioCtx.createGain();
+    n.buffer = noiseBuf; n.loop = true;
+    f.type = 'highpass'; f.frequency.value = 7500;
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(.0001, t + .045);
+    n.connect(f); f.connect(g); g.connect(musicGain);
+    n.start(t); n.stop(t + .07);
+}
+
+function mKick(t) {
+    const o = audioCtx.createOscillator(), g = audioCtx.createGain();
+    o.type = 'sine';
+    o.frequency.setValueAtTime(130, t);
+    o.frequency.exponentialRampToValueAtTime(44, t + .11);
+    g.gain.setValueAtTime(.5, t);
+    g.gain.exponentialRampToValueAtTime(.0001, t + .17);
+    o.connect(g); g.connect(musicGain);
+    o.start(t); o.stop(t + .19);
+}
+
+function musicStep(n, t) {
+    const M = mood();
+    const bar = Math.floor(n / 16) % 4, beat = n % 16;
+    const ch = M.prog[bar];
+    const barLen = stepDur() * 16;
+
+    if (M.kicks.includes(beat)) mKick(t);
+    if (M.hats && beat % 2 === 0) mHat(t, beat % 8 === 0 ? .05 : .028);
+    if (beat % M.bassEvery === 0) mTone(t, NOTE(ch.bass), stepDur() * 5, 'triangle', .34, 420);
+    if (M.hats && beat === 10) mTone(t, NOTE(ch.bass + 12), .2, 'triangle', .18, 500);
+
+    if (M.arp) mTone(t, NOTE(ch.notes[ARP[beat]] + 12), stepDur() * 1.2, 'triangle', M.arp, 3200);
+    if (beat === 0) ch.notes.forEach(m => mTone(t, NOTE(m), barLen * 0.95, 'sine', M.pad, 1600));
+    if (M.lead[n] !== undefined) mTone(t, NOTE(M.lead[n]), stepDur() * 3, 'square', M.leadVol, 2400);
+}
+
+function musicScheduler() {
+    if (!audioCtx || !musicGain) return;
+    while (nextStepTime < audioCtx.currentTime + .18) {
+        musicStep(stepIndex, nextStepTime);
+        nextStepTime += stepDur();
+        stepIndex = (stepIndex + 1) % 64;
+    }
+}
+
+function startMusic() {
+    if (!musicOn || musicTimer) return;
+    audioNow();
+    if (!musicGain) {
+        musicGain = audioCtx.createGain();
+        musicGain.gain.value = MUSIC_VOL;
+        musicGain.connect(master);
+    }
+    // resume() is async — starting the scheduler before it settles leaves the
+    // loop running against a suspended clock, i.e. silence.
+    const begin = () => {
+        if (musicTimer || !musicOn) return;
+        nextStepTime = audioCtx.currentTime + .12;
+        stepIndex = 0;
+        musicTimer = setInterval(musicScheduler, 40);
+    };
+    if (audioCtx.state === 'suspended') audioCtx.resume().then(begin).catch(() => {});
+    else begin();
+}
+
+function setMood(name) {
+    if (musicMood === name) return;
+    musicMood = name;
+    stepIndex = 0;
+    if (audioCtx && musicTimer) nextStepTime = audioCtx.currentTime + .05;
+}
+
+function stopMusic() {
+    clearInterval(musicTimer);
+    musicTimer = null;
+}
+
+/* pull the bed down briefly so an effect reads clearly over it */
+function duckMusic(depth = .55, dur = .4) {
+    if (!musicGain || !audioCtx) return;
+    const t = audioCtx.currentTime;
+    musicGain.gain.cancelScheduledValues(t);
+    musicGain.gain.setValueAtTime(musicGain.gain.value, t);
+    musicGain.gain.linearRampToValueAtTime(MUSIC_VOL * (1 - depth), t + .03);
+    musicGain.gain.linearRampToValueAtTime(MUSIC_VOL, t + dur);
+}
+
+const DUCKERS = { swing: .4, hit: .5, ko: .7, slash: .5, blast: .65, charge: .35, win: .6, lose: .6 };
+
+function haptic(ms = 30) { if (navigator.vibrate) navigator.vibrate(ms); }
+
+/* ============================================================
+   GAME STATE
+   ============================================================ */
+let gameState = {
+    mode: 'ai',
+    turn: 'p1',
+    selectedHand: null,
+    activeSpecial: null,
+    locked: false,
+    rivalLine: null,
+    scores: { p1: 0, p2: 0 },
+    p1: { left: 1, right: 1, abilities: { subtraction: true, team: true } },
+    p2: { left: 1, right: 1, abilities: { subtraction: true, team: true } }
+};
+let lastValues = { p1: { left: 1, right: 1 }, p2: { left: 1, right: 1 } };
+let lastFoeArt = null;
+
+const other = p => (p === 'p1' ? 'p2' : 'p1');
+const p2Label = () => (gameState.mode === 'ai' ? rival().name : 'Player 2');
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function updateUI() {
+    ['p1', 'p2'].forEach(who => {
+        ['left', 'right'].forEach(side => {
+            const val = gameState[who][side];
+            const valEl = document.getElementById(`${who}-val-${side}`);
+            valEl.textContent = val;
+            if (lastValues[who][side] !== val) {
+                valEl.classList.remove('count-pop');
+                void valEl.offsetWidth;
+                valEl.classList.add('count-pop');
+                lastValues[who][side] = val;
+            }
+            document.getElementById(`${who}-art-${side}`).innerHTML = renderHand(val, side, who);
+            const card = document.getElementById(`${who}-hand-${side}`);
+            card.classList.toggle('out', val === 0);
+        });
+    });
+
+    ['p1-hand-left', 'p1-hand-right', 'p2-hand-left', 'p2-hand-right'].forEach(id =>
+        document.getElementById(id).classList.remove('selected', 'target'));
+
+    if (gameState.selectedHand) {
+        const s = gameState.selectedHand;
+        document.getElementById(`${s.player}-hand-${s.side}`).classList.add('selected');
+    }
+
+    const showTargets = (gameState.selectedHand || gameState.activeSpecial === 'team') && !gameState.locked;
+    const attacker = gameState.turn, defender = other(attacker);
+    let power = 0;
+    if (showTargets) {
+        power = gameState.activeSpecial === 'team'
+            ? gameState[attacker].left + gameState[attacker].right
+            : gameState[attacker][gameState.selectedHand.side];
+        ['left', 'right'].forEach(side => {
+            if (gameState[defender][side] > 0) document.getElementById(`${defender}-hand-${side}`).classList.add('target');
+        });
+    }
+
+    // show what each hit would do, so the sum is visible before committing
+    const flipPreview = gameState.mode === 'pvp' && attacker === 'p2';
+    ['p1', 'p2'].forEach(w => ['left', 'right'].forEach(side => {
+        const el = document.getElementById(`${w}-prev-${side}`);
+        const live = gameState[w][side] > 0;
+        if (!power || w !== defender || !live) { el.hidden = true; return; }
+        const total = gameState[w][side] + power;
+        const ko = total >= 5;
+        el.textContent = ko ? `${total} · OUT!` : `→ ${total}`;
+        el.className = 'preview' + (ko ? ' ko' : '') + (flipPreview ? ' flip' : '');
+        el.hidden = false;
+    }));
+
+    const myTurn = gameState.turn === 'p1';
+    const canAct = { p1: myTurn && !gameState.locked,
+                     p2: gameState.mode === 'pvp' && !myTurn && !gameState.locked };
+
+    [['p1', ''], ['p2', 'p2-']].forEach(([who, prefix]) => {
+        const p = gameState[who], active = canAct[who];
+        const set = (id, dim) => {
+            const b = document.getElementById(prefix + id);
+            b.disabled = !active;
+            b.classList.toggle('muted', active && dim);
+        };
+        set('btn-sub', !p.abilities.subtraction);
+        set('btn-team', !p.abilities.team);
+        set('btn-half', !canHalfSplit(who));
+        set('btn-split', p.left + p.right <= 1);
+    });
+    // make it obvious the team attack is primed, and cancellable
+    const armed = gameState.activeSpecial === 'team';
+    [['btn-team', 'p1'], ['p2-btn-team', 'p2']].forEach(([id, who]) => {
+        const btn = document.getElementById(id);
+        const live = armed && gameState.turn === who;
+        btn.classList.toggle('armed', live);
+        btn.querySelector('.d').textContent = live ? 'Tap again to cancel' : 'Both hands at once';
+    });
+
+    document.getElementById('p2-deck-turn').classList.toggle('hide', myTurn);
+
+    document.getElementById('p2-chip-sub').classList.toggle('spent', !gameState.p2.abilities.subtraction);
+    document.getElementById('p2-chip-team').classList.toggle('spent', !gameState.p2.abilities.team);
+
+    document.getElementById('p1-turn').classList.toggle('hide', !myTurn);
+    document.getElementById('p2-turn').classList.toggle('hide', myTurn);
+    const bubble = document.getElementById('bubble');
+    const hotSeatP2 = gameState.mode === 'pvp' && !myTurn;
+    bubble.classList.toggle('flip', hotSeatP2);
+    bubble.classList.toggle('up', !myTurn && !hotSeatP2);
+
+    const status = document.getElementById('p2-status');
+    // a line survives the turn flip, so reactions to being hit are actually seen
+    const line = gameState.mode === 'ai' ? gameState.rivalLine : null;
+    status.textContent = line || (myTurn
+        ? 'Waiting for your move…'
+        : (gameState.mode === 'ai' ? 'Plotting a move…' : 'Player 2’s turn!'));
+    status.classList.toggle('taunt', !!line);
+
+    const foeArt = gameState.mode === 'ai' ? rival().art : 'player2';
+    if (foeArt !== lastFoeArt) {
+        lastFoeArt = foeArt;
+        document.getElementById('p2-avatar').innerHTML = renderPortrait(foeArt);
+    }
+    document.getElementById('p2-name').textContent = p2Label();
+
+    document.getElementById('score-p1').textContent = gameState.scores.p1;
+    document.getElementById('score-p2').textContent = gameState.scores.p2;
+}
+
+function canHalfSplit(player) {
+    const p = gameState[player];
+    return (p.left === 0 && p.right > 0 && p.right % 2 === 0) ||
+           (p.right === 0 && p.left > 0 && p.left % 2 === 0);
+}
+
+function say(msg, shout = false) {
+    const b = document.getElementById('bubble');
+    b.textContent = msg;
+    b.classList.toggle('shout', shout);
+}
+
+/* ============================================================
+   INPUT
+   ============================================================ */
+function handleHandClick(player, side) {
+    if (gameState.locked) return;
+    const human = gameState.turn === 'p1' || (gameState.turn === 'p2' && gameState.mode === 'pvp');
+    if (!human) return;
+
+    haptic();
+
+    const me = gameState.turn, them = other(me);
+    const val = gameState[player][side];
+
+    let cancelled = false;
+    if (gameState.activeSpecial === 'team') {
+        if (player === them) {
+            if (val > 0) { executeTeamAttack(me, side); return; }
+            playSound('tap');
+            say('That hand is already out — pick another target.');
+            return;
+        }
+        if (val === 0) { playSound('tap'); say('That hand is out of the fight!'); return; }
+        // reaching for your own hand means you want a normal attack after all
+        gameState.activeSpecial = null;
+        cancelled = true;
+    }
+
+    if (player === me) {
+        if (val === 0) { playSound('tap'); say('That hand is out of the fight!'); return; }
+        playSound('select');
+        gameState.selectedHand = { player: me, side };
+        say(`${cancelled ? 'Team attack cancelled. ' : ''}${side.toUpperCase()} hand ready — ${val} ${val === 1 ? 'finger' : 'fingers'}. Now pick a target!`);
+        updateUI();
+    } else {
+        if (!gameState.selectedHand) { playSound('tap'); say('Pick one of your own hands first!'); return; }
+        if (val === 0) { playSound('tap'); say('That hand is already out!'); return; }
+        executeAttack(gameState.selectedHand.side, side);
+    }
+}
+
+/* ============================================================
+   COMBAT — 5 or more knocks a hand out
+   ============================================================ */
+function executeAttack(attackerSide, defenderSide) {
+    const att = gameState.turn, def = other(att);
+    const power = gameState[att][attackerSide];
+    const before = gameState[def][defenderSide];
+
+    gameState.locked = true;
+
+    const attId = `${att}-hand-${attackerSide}`, defId = `${def}-hand-${defenderSide}`;
+    const attEl = document.getElementById(attId), defEl = document.getElementById(defId);
+    const lunge = att === 'p1' ? 'lunge-up' : 'lunge-down';
+
+    const streak = att === 'p1' ? 'streak-up' : 'streak-down';
+    attEl.classList.add(lunge, streak);
+    setTimeout(() => attEl.classList.remove(lunge, streak), 340);
+
+    playSound('swing');
+    haptic(45);
+
+    setTimeout(() => {
+        defEl.classList.add('hit');
+        setTimeout(() => defEl.classList.remove('hit'), 380);
+
+        const total = before + power;
+        let next;
+
+        if (total >= 5) {
+            next = 0;
+            rivalSays(att === 'p2' ? 'ko' : 'hurt');
+            playSound('ko');
+            haptic(110);
+            impactFreeze(() => {
+                quake();
+                flashSpeedlines();
+                burstConfetti(...centerOf(defId), ['#f4b32c', '#ef4444', '#ffffff'], 40);
+                popBurst(defId, `${total}\nOUT!`, 'star');
+            });
+            say(`KNOCKOUT! It hit ${total} — that hand is out!`, true);
+        } else {
+            next = total;
+            if (att === 'p2') rivalSays('hit');
+            playSound('hit');
+            popBurst(defId, `+${power}`, 'var(--mint)');
+            say(`Hit! That hand is on ${next} now.`);
+        }
+
+        gameState[def][defenderSide] = next;
+        gameState.selectedHand = null;
+        gameState.locked = false;
+        updateUI();
+
+        if (!checkWin()) switchTurn();
+    }, 210);
+}
+
+function executeTeamAttack(att, defenderSide) {
+    const def = other(att);
+    const power = gameState[att].left + gameState[att].right;
+    const total = gameState[def][defenderSide] + power;
+    const next = total >= 5 ? 0 : total;
+
+    playSound(next === 0 ? 'ko' : 'blast');
+    haptic(70);
+    quake();
+    flashSpeedlines();
+
+    gameState[def][defenderSide] = next;
+    gameState[att].abilities.team = false;
+    gameState.activeSpecial = null;
+    gameState.selectedHand = null;
+
+    const id = `${def}-hand-${defenderSide}`;
+    burstConfetti(...centerOf(id), ['#f0607d', '#ffd8e0', '#ffffff'], 40);
+    if (next === 0) {
+        popBurst(id, 'TEAM\nK.O.', 'star');
+        say(`TEAM ATTACK! ${power} combined power knocked that hand clean out!`, true);
+    } else {
+        popBurst(id, `+${power}`, 'var(--p2)');
+        say(`TEAM ATTACK! ${power} combined power — that hand is on ${next}.`, true);
+    }
+
+    updateUI();
+    if (!checkWin()) switchTurn();
+}
+
+/* ============================================================
+   ABILITIES
+   ============================================================ */
+function activateAbility(key) {
+    if (gameState.locked) return;
+    const me = gameState.turn;
+    playSound('tap');
+    if (!gameState[me].abilities[key]) {
+        say(key === 'subtraction'
+            ? 'Minus is a one-shot — you have already used it this round!'
+            : 'Team attack is a one-shot — you have already used it this round!');
+        return;
+    }
+
+    if (key === 'subtraction') {
+        const them = other(me), opp = gameState[them];
+        if (opp.left === 0 && opp.right === 0) { say('No rival hands left to trim!'); return; }
+        const choices = [];
+        if (opp.left > 0)  choices.push({ label: `Left hand (${opp.left})`,  action: () => pickTrimAmount(them, 'left') });
+        if (opp.right > 0) choices.push({ label: `Right hand (${opp.right})`, action: () => pickTrimAmount(them, 'right') });
+        choices.push({ label: 'Cancel', ghost: true, action: closeSheet });
+        openSheet('Minus', 'Which rival hand do you want to trim?', choices, 'scissors');
+    } else {
+        if (gameState.activeSpecial === 'team') {          // already armed — stand down
+            gameState.activeSpecial = null;
+            say('Team attack cancelled.');
+            updateUI();
+            return;
+        }
+        const p = gameState[me];
+        if (p.left === 0 || p.right === 0) { say('Team attack needs BOTH of your hands alive!'); return; }
+        gameState.activeSpecial = 'team';
+        playSound('charge');
+        say('TEAM ATTACK READY! Tap a rival hand to hit with both hands at once.', true);
+        updateUI();
+    }
+}
+
+function pickTrimAmount(target, side) {
+    closeSheet();
+    const cur = gameState[target][side];
+    const buttons = [];
+    for (let trim = 1; trim <= cur; trim++) {
+        const left = cur - trim;
+        buttons.push({
+            label: left <= 0 ? `−${trim} · WIPE OUT` : `−${trim} · leaves ${left}`,
+            action: () => {
+                gameState[target][side] = Math.max(0, left);
+                gameState[gameState.turn].abilities.subtraction = false;
+                playSound('slash');
+                haptic(55);
+                const id = `${target}-hand-${side}`;
+                closeSheet();
+                if (left <= 0) {
+                    burstConfetti(...centerOf(id), ['#2fa8e0', '#cdeaff', '#ffffff'], 36);
+                    popBurst(id, 'SNIP\nOUT!', 'star');
+                    say(`Snip snip — that ${side} hand is gone!`, true);
+                } else {
+                    popBurst(id, `−${trim}`, 'var(--p1)');
+                    say(`Trimmed! That ${side} hand is down to ${left}.`);
+                }
+                updateUI();
+                if (!checkWin()) switchTurn();
+            }
+        });
+    }
+    buttons.push({ label: 'Cancel', ghost: true, action: closeSheet });
+    openSheet('Trim fingers', `That hand has ${cur} finger${cur === 1 ? '' : 's'}. How many do you snip?`, buttons, 'scissors');
+}
+
+function triggerSplitModal() {
+    if (gameState.locked) return;
+    const me = gameState.turn;
+    const total = gameState[me].left + gameState[me].right;
+    if (total <= 1) { say('Not enough fingers to shift!'); return; }
+
+    const opts = [];
+    for (let i = 0; i <= total; i++) {
+        const l = i, r = total - i;
+        if (l <= 4 && r <= 4 && (l !== gameState[me].left || r !== gameState[me].right)) {
+            opts.push({ label: `${l} | ${r}`, action: () => applySplit(l, r) });
+        }
+    }
+    if (!opts.length) { say('No other way to split those fingers!'); return; }
+    opts.push({ label: 'Cancel', ghost: true, action: closeSheet });
+    openSheet('Shift', 'Slide fingers between your own hands (LEFT | RIGHT). It uses your whole turn.', opts, 'scales');
+}
+
+function applySplit(l, r) {
+    const me = gameState.turn;
+    gameState[me].left = l;
+    gameState[me].right = r;
+    playSound('shift');
+    closeSheet();
+    say(`Shifted to ${l} | ${r}.`);
+    updateUI();
+    switchTurn();
+}
+
+function triggerHalfSplit() {
+    if (gameState.locked) return;
+    const me = gameState.turn, p = gameState[me];
+    let alive, gone;
+    if (p.left === 0 && p.right > 0) { gone = 'left'; alive = 'right'; }
+    else if (p.right === 0 && p.left > 0) { gone = 'right'; alive = 'left'; }
+    else { say('Half split needs one hand out and one hand alive!'); return; }
+
+    if (p[alive] % 2 !== 0) { say(`Half split needs an EVEN number of fingers (you have ${p[alive]}).`); return; }
+
+    const half = p[alive] / 2;
+    p[alive] = half;
+    p[gone] = half;
+
+    playSound('revive');
+    haptic();
+    const id = `${me}-hand-${gone}`;
+    burstConfetti(...centerOf(id), ['#34c79a', '#c9f2e4', '#ffffff'], 36);
+    popBurst(id, `BACK!\n+${half}`, 'star');
+    say(`HALF SPLIT! That ${gone} hand is back with ${half}!`, true);
+
+    updateUI();
+    switchTurn();
+}
+
+/* ============================================================
+   RIVAL CHATTER — shown in the nameplate, not the action bubble,
+   so it never competes with the game's own feedback.
+   ============================================================ */
+const TAUNTS = {
+    easy: {
+        hit:  ['Ooh, got you!', 'Hehe, my turn was fun.', 'Take that… I think?'],
+        ko:   ['Wow, I did it!', 'Did you see that?!', 'Lucky me!'],
+        trim: ['Snip snip!', 'Sorry about that!'],
+        hurt: ['Ouch! Nice one.', 'Aw, no fair!', 'You are good at this.'],
+        victory: ['I won?! Beginner\u2019s luck, honest!', 'Yay! Best of three?', 'I got lucky there!'],
+        beaten: ['You were amazing!', 'Good game! Again?', 'Wow, you are really good at this.']
+    },
+    normal: {
+        hit:  ['Take that!', 'You are wide open.', 'Keep up.'],
+        ko:   ['One down!', 'That hand is finished.', 'Getting easier now.'],
+        trim: ['Snip. Much better.', 'Let me trim that for you.'],
+        hurt: ['Hmph. Not bad.', 'Lucky hit.', 'I was going easy on you.'],
+        victory: ['Better luck next time.', 'Told you to keep up.', 'That is how it is done.'],
+        beaten: ['Alright \u2014 you earned that one.', 'Not bad. Rematch?', 'Hmph. I want another go.']
+    },
+    hard: {
+        hit:  ['Predictable.', 'Too slow.', 'Is that everything?'],
+        ko:   ['Finished.', 'One hand left. Count it.', 'You never had a chance.'],
+        trim: ['Precision.', 'Snip.'],
+        hurt: ['...', 'Enjoy it while it lasts.', 'A minor setback.'],
+        victory: ['Was that your best?', 'Predictable, from start to finish.', 'Do not waste my time again.'],
+        beaten: ['\u2026Impossible.', 'Enjoy it. It will not happen twice.', 'You got lucky. Nothing more.']
+    }
+};
+
+function taunt(kind) {
+    const set = (TAUNTS[difficulty] || TAUNTS.normal)[kind];
+    return set && set.length ? set[(Math.random() * set.length) | 0] : '';
+}
+
+function rivalSays(kind) {
+    if (gameState.mode !== 'ai') return;
+    const line = taunt(kind);
+    if (line) gameState.rivalLine = line;
+
+    const face = document.getElementById('p2-avatar');
+    if (!face) return;
+    const mood = kind === 'hurt' ? 'rattled' : (kind === 'ko' ? 'gloating' : null);
+    if (!mood) return;
+    face.classList.remove('rattled', 'gloating');
+    void face.offsetWidth;
+    face.classList.add(mood);
+    setTimeout(() => face.classList.remove(mood), mood === 'rattled' ? 1700 : 800);
+}
+
+/* ============================================================
+   RECORD + DIFFICULTY
+   ============================================================ */
+const RIVALS = {
+    easy:   { name: 'Momo',     title: 'the Apprentice', art: 'momo',  level: 'Easy' },
+    normal: { name: 'Kurogane', title: 'the Duelist',    art: 'rival', level: 'Normal' },
+    hard:   { name: 'Yurei',    title: 'the Phantom',    art: 'yurei', level: 'Hard' }
+};
+const rival = () => RIVALS[difficulty] || RIVALS.normal;
+let difficulty = 'normal';
+let history = [];
+
+function loadSaved() {
+    try {
+        history = JSON.parse(localStorage.getItem('fingaz-history') || '[]');
+        const d = localStorage.getItem('fingaz-diff');
+        if (DIFFS[d]) difficulty = d;
+    } catch (e) { history = []; }
+}
+function persist() {
+    try {
+        localStorage.setItem('fingaz-history', JSON.stringify(history.slice(-60)));
+        localStorage.setItem('fingaz-diff', difficulty);
+    } catch (e) { /* file:// or private mode — session-only is fine */ }
+}
+function recordResult(winner) {
+    history.push({ w: winner, m: gameState.mode, d: difficulty });
+    persist();
+}
+
+function setDifficulty(d) {
+    difficulty = d;
+    playSound('select');
+    persist();
+    renderStats();
+    updateUI();            // swap in that rival's name and portrait
+    say(`${rival().name}, ${rival().title}, steps up.`);
+}
+
+function openStats() { playSound('tap'); document.getElementById('stats').hidden = false; renderStats(); }
+function closeStats() { playSound('tap'); document.getElementById('stats').hidden = true; }
+
+function renderStats() {
+    const wins = history.filter(h => h.w === 'p1').length;
+    const losses = history.length - wins;
+    document.getElementById('stats-tally').innerHTML = `
+        <div class="col"><span class="who">You</span><span class="p1">${wins}</span></div>
+        <div class="col"><span class="who">played</span><span style="opacity:.35">${history.length}</span></div>
+        <div class="col"><span class="who">Rival</span><span class="p2">${losses}</span></div>`;
+
+    document.getElementById('diff-row').innerHTML = Object.entries(RIVALS).map(([k, r]) =>
+        `<button class="btn${k === difficulty ? ' on' : ''}" onclick="setDifficulty('${k}')">
+            <span class="face">${renderPortrait(r.art)}</span>${r.name}<span class="sub">${r.level}</span>
+         </button>`
+    ).join('');
+
+    const list = document.getElementById('stats-list');
+    if (!history.length) {
+        list.innerHTML = '<div class="stats-empty">No games yet — go throw some fingaz!</div>';
+        return;
+    }
+    list.innerHTML = history.slice().reverse().slice(0, 20).map(h => {
+        const youWon = h.w === 'p1';
+        const foe = h.m === 'ai' ? ((RIVALS[h.d] || {}).name || 'Rival') : 'Player 2';
+        return `<div class="stats-row ${youWon ? 'won' : 'lost'}">
+                    <span>${youWon ? 'You won' : foe + ' won'}</span>
+                    <span class="tag">${h.m === 'ai' ? ((RIVALS[h.d] || {}).level || h.d) : '2 player'}</span>
+                </div>`;
+    }).join('');
+}
+
+/* ============================================================
+   TURNS + CPU
+   ============================================================ */
+function switchTurn() {
+    gameState.selectedHand = null;
+    gameState.activeSpecial = null;
+    gameState.turn = other(gameState.turn);
+    updateUI();
+    if (gameState.mode === 'ai' && gameState.turn === 'p2') {
+        // let the reaction sit for a beat, then go quiet while it thinks
+        setTimeout(() => { gameState.rivalLine = null; updateUI(); }, 620);
+        setTimeout(cpuTurn, 950);
+    }
+}
+
+/* every legal attack, with what it achieves and what it exposes */
+function cpuMoves() {
+    const p2 = gameState.p2, p1 = gameState.p1;
+    const mine = ['left', 'right'].filter(s => p2[s] > 0);
+    const yours = ['left', 'right'].filter(s => p1[s] > 0);
+    const out = [];
+    for (const a of mine) for (const d of yours) {
+        const total = p2[a] + p1[d];
+        const kills = total >= 5;
+        const after = { left: p1.left, right: p1.right };
+        after[d] = kills ? 0 : total;
+        let threats = 0;
+        ['left', 'right'].forEach(pa => {
+            if (after[pa] > 0) ['left', 'right'].forEach(pd => {
+                if (p2[pd] > 0 && after[pa] + p2[pd] >= 5) threats++;
+            });
+        });
+        out.push({ a, d, kills, wins: kills && yours.length === 1, threats });
+    }
+    return out;
+}
+
+function cpuTurn() {
+    if (gameState.turn !== 'p2' || gameState.mode !== 'ai') return;
+    const p2 = gameState.p2, p1 = gameState.p1;
+    const yours = ['left', 'right'].filter(s => p1[s] > 0);
+    const moves = cpuMoves();
+    if (!moves.length) return;
+
+    const rand = arr => arr[(Math.random() * arr.length) | 0];
+    const go = m => executeAttack(m.a, m.d);
+    const winning = moves.find(m => m.wins);
+
+    if (difficulty === 'easy') {
+        // often misses the finish, rarely trims — beatable by a child
+        if (winning && Math.random() < .35) return go(winning);
+        if (canHalfSplit('p2') && Math.random() < .5) return triggerHalfSplit();
+        if (p2.abilities.subtraction && yours.length === 1 && Math.random() < .2) return cpuTrim(yours[0], 1);
+        return go(rand(moves));
+    }
+
+    if (difficulty === 'hard') {
+        if (winning) return go(winning);
+        if (p2.abilities.subtraction && yours.length === 1) return cpuTrim(yours[0], p1[yours[0]]);
+        if (canHalfSplit('p2')) return triggerHalfSplit();
+        // prefer a knockout, and among equals the move that leaves it least exposed
+        const kills = moves.filter(m => m.kills);
+        const pool = kills.length ? kills : moves;
+        const safest = Math.min(...pool.map(m => m.threats));
+        return go(rand(pool.filter(m => m.threats === safest)));
+    }
+
+    // normal
+    if (winning) return go(winning);
+    if (canHalfSplit('p2')) return triggerHalfSplit();
+    if (p2.abilities.subtraction && yours.length) {
+        if (yours.length === 1) return cpuTrim(yours[0], p1[yours[0]]);
+        if (Math.random() < .45) {
+            const t = yours.reduce((a, b) => (p1[a] >= p1[b] ? a : b));
+            return cpuTrim(t, Math.min(p1[t], 1 + ((Math.random() * 2) | 0)));
+        }
+    }
+    return go(moves.find(m => m.kills) || rand(moves));
+}
+
+function cpuTrim(side, amount) {
+    const left = Math.max(0, gameState.p1[side] - amount);
+    gameState.p1[side] = left;
+    gameState.p2.abilities.subtraction = false;
+    rivalSays('trim');
+    playSound('slash');
+    const id = `p1-hand-${side}`;
+    if (left === 0) burstConfetti(...centerOf(id), ['#2fa8e0', '#cdeaff'], 30);
+    popBurst(id, `−${amount}`, 'var(--p1)');
+    say(`The rival trimmed your ${side} hand by ${amount}!`, true);
+    updateUI();
+    if (!checkWin()) switchTurn();
+}
+
+/* ============================================================
+   DICE TOSS — decides who strikes first.
+   Dice rather than rock-paper-scissors: on one shared phone there is
+   no way to hide a choice from the player sitting opposite you.
+   ============================================================ */
+const PIPS = {
+    0: [],
+    1: [[50, 50]],
+    2: [[31, 31], [69, 69]],
+    3: [[31, 31], [50, 50], [69, 69]],
+    4: [[31, 31], [69, 31], [31, 69], [69, 69]],
+    5: [[31, 31], [69, 31], [50, 50], [31, 69], [69, 69]],
+    6: [[31, 28], [69, 28], [31, 50], [69, 50], [31, 72], [69, 72]]
+};
+let toss = { active: false, rolling: false, p1: 0, p2: 0 };
+
+function renderDie(v, who) {
+    const face = who === 'p1' ? 'var(--p1-soft)' : 'var(--p2-soft)';
+    const waiting = v === 0;
+    return `<svg viewBox="0 0 100 100" class="die-art${waiting ? ' waiting' : ''}">
+        <rect x="6" y="6" width="88" height="88" rx="21"
+              fill="${waiting ? 'transparent' : face}"
+              stroke="var(--ink)" stroke-width="${waiting ? 3.5 : 5}"
+              ${waiting ? 'stroke-dasharray="11 8" opacity=".4"' : ''}/>
+        ${v === 0
+            ? `<text x="50" y="54" text-anchor="middle" dominant-baseline="middle"
+                     font-family="var(--font-display)" font-size="44" fill="var(--ink)" opacity=".3">?</text>`
+            : PIPS[v].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="8.5" fill="var(--ink)"/>`).join('')}
+    </svg>`;
+}
+
+function paintDice() {
+    document.getElementById('die-p1').innerHTML = renderDie(toss.p1, 'p1');
+    document.getElementById('die-p2').innerHTML = renderDie(toss.p2, 'p2');
+}
+
+function tossMsg(t) { document.getElementById('toss-msg').textContent = t; }
+
+function openToss() {
+    toss = { active: true, rolling: false, p1: 0, p2: 0 };
+    gameState.locked = true;
+    const el = document.getElementById('toss');
+    el.hidden = false;
+    el.classList.toggle('solo', gameState.mode === 'ai');
+    document.getElementById('toss-p2-name').textContent = p2Label();
+    const btn = document.getElementById('toss-roll');
+    btn.disabled = false;
+    btn.style.visibility = 'visible';
+    btn.textContent = 'Roll the dice';
+    ['die-p1', 'die-p2'].forEach(id => document.getElementById(id).classList.remove('won'));
+    tossMsg('Highest roll goes first!');
+    paintDice();
+}
+
+function rollToss() {
+    if (!toss.active || toss.rolling) return;
+    toss.rolling = true;
+    playSound('dice');
+    haptic(40);
+    tossMsg('Rolling\u2026');
+    document.getElementById('toss-roll').disabled = true;
+    const dice = ['die-p1', 'die-p2'].map(id => document.getElementById(id));
+    dice.forEach(d => { d.classList.add('rolling'); d.classList.remove('won'); });
+
+    const spin = setInterval(() => {
+        toss.p1 = 1 + ((Math.random() * 6) | 0);
+        toss.p2 = 1 + ((Math.random() * 6) | 0);
+        paintDice();
+    }, 85);
+
+    setTimeout(() => {
+        clearInterval(spin);
+        toss.p1 = 1 + ((Math.random() * 6) | 0);
+        toss.p2 = 1 + ((Math.random() * 6) | 0);
+        paintDice();
+        dice.forEach(d => d.classList.remove('rolling'));
+        toss.rolling = false;
+        resolveToss();
+    }, 1250);
+}
+
+function resolveToss() {
+    if (toss.p1 === toss.p2) {
+        playSound('tap');
+        tossMsg(`Dead heat on ${toss.p1} \u2014 roll again!`);
+        const btn = document.getElementById('toss-roll');
+        btn.disabled = false;
+        btn.textContent = 'Roll again';
+        return;
+    }
+    // the roll is spent — let the dice have the moment
+    document.getElementById('toss-roll').style.visibility = 'hidden';
+    const p1Wins = toss.p1 > toss.p2;
+    const winner = document.getElementById(p1Wins ? 'die-p1' : 'die-p2');
+    winner.classList.add('won');
+    playSound(p1Wins ? 'win' : 'ko');
+    haptic(90);
+    const r = winner.getBoundingClientRect();
+    burstConfetti(r.left + r.width / 2, r.top + r.height / 2,
+        p1Wins ? ['#2fa8e0', '#f4b32c', '#ffffff'] : ['#f0607d', '#8b7fa8'], 50);
+    tossMsg(p1Wins
+        ? `${toss.p1} beats ${toss.p2} \u2014 you strike first!`
+        : `${toss.p2} beats ${toss.p1} \u2014 ${p2Label()} strikes first.`);
+    setTimeout(() => beginPlay(p1Wins ? 'p1' : 'p2'), 1500);
+}
+
+function beginPlay(first) {
+    document.getElementById('toss').hidden = true;
+    ['die-p1', 'die-p2'].forEach(id => document.getElementById(id).classList.remove('won', 'rolling'));
+    toss.active = false;
+    gameState.locked = false;
+    gameState.turn = first;
+    say(first === 'p1'
+        ? 'You go first! Pick a hand, then tap a rival hand.'
+        : `${p2Label()} goes first.`);
+    updateUI();
+    if (gameState.mode === 'ai' && first === 'p2') setTimeout(cpuTurn, 950);
+}
+
+/* ============================================================
+   WIN / RESET
+   ============================================================ */
+function checkWin() {
+    const p1Out = gameState.p1.left === 0 && gameState.p1.right === 0;
+    const p2Out = gameState.p2.left === 0 && gameState.p2.right === 0;
+    if (!p1Out && !p2Out) return false;
+
+    const youWon = p2Out;
+    gameState.locked = true;
+    recordResult(youWon ? 'p1' : 'p2');
+    updateUI();
+
+    if (youWon) {
+        gameState.scores.p1++;
+        playSound('win');
+        burstConfetti(innerWidth / 2, innerHeight / 2, ['#2fa8e0', '#f4b32c', '#f0607d', '#34c79a', '#ffffff'], 150);
+    } else {
+        gameState.scores.p2++;
+        playSound('lose');
+        burstConfetti(innerWidth / 2, innerHeight / 2, ['#f0607d', '#8b7fa8', '#d6cfe0'], 70);
+    }
+    haptic(180);
+
+    const parting = gameState.mode === 'ai'
+        ? taunt(youWon ? 'beaten' : 'victory')
+        : '';
+
+    setTimeout(() => {
+        setMood(youWon ? 'victory' : 'defeat');
+        openSheet(
+            youWon ? 'You win!' : `${p2Label()} wins!`,
+            parting || (youWon ? 'Both rival hands are out. Flawless victory!'
+                              : 'Your hands are out of fingers. Rematch?'),
+            [{ label: 'Play again', action: resetGame }],
+            youWon ? 'hero' : (gameState.mode === 'ai' ? rival().art : 'player2'),
+            true,
+            youWon ? 'p1' : 'p2'
+        );
+    }, 430);
+    return true;
+}
+
+function resetGame() {
+    gameState.turn = 'p1';
+    gameState.selectedHand = null;
+    gameState.activeSpecial = null;
+    gameState.locked = false;
+    gameState.rivalLine = null;
+    gameState.p1 = { left: 1, right: 1, abilities: { subtraction: true, team: true } };
+    gameState.p2 = { left: 1, right: 1, abilities: { subtraction: true, team: true } };
+    lastValues = { p1: { left: 1, right: 1 }, p2: { left: 1, right: 1 } };
+    setMood('battle');
+    closeSheet();
+    updateUI();
+    openToss();
+}
+
+/* ============================================================
+   SHEET
+   ============================================================ */
+function openSheet(title, body, actions, icon = 'spark', isPortrait = false, orientTo = null) {
+    const facing = orientTo || gameState.turn;
+    document.querySelector('.sheet').classList.toggle('flip',
+        gameState.mode === 'pvp' && facing === 'p2');
+    document.getElementById('sheet-title').textContent = title;
+    const iconEl = document.getElementById('sheet-icon');
+    iconEl.classList.toggle('portrait-frame', isPortrait);
+    if (isPortrait) iconEl.innerHTML = renderPortrait(icon);
+    else if (ICONS[icon]) iconEl.innerHTML = ICONS[icon];
+    else iconEl.textContent = icon;
+
+    const b = document.getElementById('sheet-body');
+    b.className = 'sheet-body';
+    if (typeof body === 'string') {
+        b.textContent = isPortrait && gameState.mode === 'ai' ? `\u201c${body}\u201d` : body;
+        if (isPortrait && gameState.mode === 'ai') b.classList.add('says');
+    }
+    else { b.innerHTML = ''; b.appendChild(body); b.classList.add('rules'); }
+
+    const wrap = document.getElementById('sheet-actions');
+    wrap.innerHTML = '';
+    wrap.className = actions.length > 4 ? 'sheet-actions grid' : 'sheet-actions';
+    actions.forEach(a => {
+        const btn = document.createElement('button');
+        btn.className = 'btn' + (a.ghost ? ' wide' : ' btn-gold');
+        btn.textContent = a.label;
+        btn.onclick = a.action;
+        wrap.appendChild(btn);
+    });
+    document.getElementById('overlay').classList.add('show');
+}
+
+function closeSheet() { document.getElementById('overlay').classList.remove('show'); }
+
+function showRules() {
+    const d = document.createElement('div');
+    d.innerHTML = `
+        <p><b>First move:</b> both players roll a die — highest goes first.</p>
+        <p><b>Goal:</b> knock out both of the rival's hands.</p>
+        <p><b>Attack:</b> tap one of your hands, then a rival hand. Your fingers get added to theirs.</p>
+        <p><b>5 or more:</b> that hand is knocked out for good.</p>
+        <p><b>Shift:</b> slide fingers between your own hands instead of attacking.</p>
+        <p><b>Half:</b> with one hand out and an even number on the other, split it in half to bring the dead hand back.</p>
+        <p><b>Minus:</b> once per game, snip fingers off a rival hand.</p>
+        <p><b>Team:</b> once per game, attack with both hands combined. Tap it again (or one of your own hands) to change your mind.</p>`;
+    openSheet('How to play', d, [{ label: 'Got it!', action: closeSheet }], 'book');
+}
+
+/* ============================================================
+   CONTROLS
+   ============================================================ */
+document.getElementById('mode-btn').addEventListener('click', () => {
+    gameState.mode = gameState.mode === 'ai' ? 'pvp' : 'ai';
+    gameState.scores = { p1: 0, p2: 0 };
+    document.getElementById('mode-btn').textContent = gameState.mode === 'ai' ? 'VS CPU' : '2 PLAYER';
+    document.getElementById('p2-name').textContent = p2Label();
+    const pvp = gameState.mode === 'pvp';
+    lastFoeArt = null;
+    document.getElementById('p2-deck-avatar').innerHTML = renderPortrait('player2');
+    document.getElementById('p2-deck').hidden = !pvp;
+    document.getElementById('p2-nameplate').hidden = pvp;
+    resetGame();
+});
+
+function paintIcons(root = document) {
+    root.querySelectorAll('[data-icon]').forEach(el => { el.innerHTML = ICONS[el.dataset.icon] || ''; });
+}
+
+/* one mute control for effects and music together */
+document.getElementById('sound-btn').addEventListener('click', e => {
+    const on = !soundEnabled;
+    soundEnabled = on;
+    musicOn = on;
+    e.currentTarget.innerHTML = on ? ICONS.soundOn : ICONS.soundOff;
+    if (on) startMusic(); else stopMusic();
+});
+
+/* Browsers block audio until a gesture, and the gesture that works varies by
+   browser — so keep trying on each one until the context is really running. */
+const MUSIC_GESTURES = ['pointerdown', 'touchstart', 'mousedown', 'keydown', 'click'];
+function tryStartMusic() {
+    startMusic();
+    setTimeout(() => {
+        if (musicTimer && audioCtx && audioCtx.state === 'running') {
+            MUSIC_GESTURES.forEach(ev => removeEventListener(ev, tryStartMusic));
+        }
+    }, 120);
+}
+MUSIC_GESTURES.forEach(ev => addEventListener(ev, tryStartMusic, { passive: true }));
+
+document.getElementById('help-btn').addEventListener('click', showRules);
+document.getElementById('score-btn').addEventListener('click', openStats);
+
+loadSaved();
+paintIcons();
+document.getElementById('sound-btn').innerHTML = ICONS.soundOn;
+document.getElementById('p1-avatar').innerHTML = renderPortrait('hero');
+document.getElementById('p2-avatar').innerHTML = renderPortrait('rival');
+updateUI();
+openToss();
+
+/* offline support only applies when served over http(s) — opening the file
+   directly still works, it just skips this. */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+    addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>
