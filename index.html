@@ -2521,7 +2521,7 @@ function playSound(name) {
    ============================================================ */
 /* Bumped with every release, alongside CACHE in sw.js — the two are meant to
    read the same, so the card tells you which build actually reached you. */
-const APP_VERSION = 'v11';
+const APP_VERSION = 'v12';
 
 const MUSIC_VOL = 0.115;
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
@@ -3341,7 +3341,7 @@ function streakVs(key) {
     return { mine, theirs };
 }
 
-const GRUDGE_AT = 3;
+const GRUDGE_AT = 2;
 
 /* rattled when you are on a run against them, smug when they are on one
    against you — and nothing at all until it is a run worth mentioning */
