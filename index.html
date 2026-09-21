@@ -282,6 +282,7 @@ body.pvp main { padding: 10px 12px 14px; }
 }
 #challenger.run .challenger-actions { animation: nameIn .4s .34s cubic-bezier(.2,1.6,.4,1) both; }
 .challenger-actions .btn { padding: 12px; font-size: 13px; }
+.challenger-actions .btn[hidden] { display: none; }
 
 /* nothing starts until a mode is picked — the game opens on the choice rather
    than dropping you into a rival you did not ask for */
@@ -3609,10 +3610,27 @@ function challengerTaken(key) {
     applyMode('ai');
 }
 
-function offerChallenger(key) {
-    document.getElementById('challenger-fight').onclick = () => { playSound('tap'); challengerTaken(key); };
-    document.getElementById('challenger-later').onclick = () => { playSound('tap'); closeChallenger(); };
+/* The same entrance serves two moments: a rival earned in an ordinary match,
+   where you choose whether to take them on now, and one you have just walked
+   into mid-run, where the only way out is through. */
+function offerChallenger(key, opts = {}) {
+    const fight = document.getElementById('challenger-fight');
+    const later = document.getElementById('challenger-later');
+    fight.textContent = opts.fightLabel || 'Fight them now';
+    fight.onclick = () => { playSound('tap'); (opts.onFight || (() => challengerTaken(key)))(); };
+    later.hidden = !!opts.noRetreat;
+    later.onclick = () => { playSound('tap'); closeChallenger(); };
     showChallenger(key);
+}
+
+/* a rival you have not earned, stepping up in a run: introduce them properly */
+function introduceInRun(key) {
+    tourney.introduced.push(key);
+    offerChallenger(key, {
+        fightLabel: `Round ${tourney.stage + 1}: fight`,
+        noRetreat: true,
+        onFight: () => { closeChallenger(); resetGame(); }
+    });
 }
 
 /* beaten a rival: line up the next one, or pay out */
@@ -3623,6 +3641,7 @@ function tourneyAdvance() {
     const r = rival();
     const intro = introLine();
     closeSheet();
+    if (!isUnlocked(difficulty)) return introduceInRun(difficulty);
     openSheet(
         `Round ${tourney.stage + 1}`,
         intro.text,
@@ -3925,7 +3944,7 @@ function checkWin() {
     playClockOff();
     // beating a rival opens the next one along; mid-run it waits for the run
     const earned = (youWon && gameState.mode === 'ai') ? unlockFromWin(difficulty) : null;
-    if (earned && tourney) pendingChallenger = earned;
+    if (earned && tourney && !tourney.introduced.includes(earned)) pendingChallenger = earned;
     // a round of a tourney is not a game on its own — the run is recorded at its end
     if (!tourney) recordResult(youWon ? 'p1' : 'p2');
     updateUI();
@@ -4054,7 +4073,7 @@ function applyMode(mode) {
 
     if (tour) {
         if (!tourney) pickedDiff = difficulty;
-        tourney = { stage: 0, order: drawTourneyLadder() };
+        tourney = { stage: 0, order: drawTourneyLadder(), introduced: [] };
         difficulty = tourney.order[0];
     } else if (tourney) {
         tourney = null;
@@ -4080,6 +4099,8 @@ function applyMode(mode) {
     document.getElementById('p2-nameplate').hidden = pvp;
     document.body.classList.toggle('pvp', pvp);
     resetGame();
+    // round one can be a stranger as easily as any other
+    if (tour && !isUnlocked(difficulty)) introduceInRun(difficulty);
 }
 
 /* switching modes throws away the current match, so ask first */
