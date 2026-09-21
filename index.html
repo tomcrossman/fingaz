@@ -675,6 +675,14 @@ main {
     margin: 0 0 10px; font-family: var(--font-display); font-size: 26px;
     text-transform: uppercase; letter-spacing: .02em; text-align: center; color: var(--panel-fg);
 }
+.stats-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 14px; }
+.stats-tab {
+    font-family: var(--font-display); font-size: 19px; font-weight: 400;
+    text-transform: uppercase; letter-spacing: .02em;
+    padding: 9px 6px;
+}
+.stats-tab.on { background: var(--gold); }
+.stats-pane[hidden] { display: none; }
 .stats-tally {
     display: flex; align-items: center; justify-content: center; gap: 10px;
     padding: 10px; margin-bottom: 14px;
@@ -713,6 +721,33 @@ main {
 .stats-row.lost { background: #ffe3e8; }
 .stats-empty { font-size: 11.5px; font-weight: 700; color: var(--panel-fg-dim); text-align: center; padding: 14px 0; }
 .stats-close { width: 100%; padding: 11px; font-size: 13px; }
+
+/* The board is built end to end for two players facing each other, so a phone
+   on its side has nowhere to put either deck. Rather than let the layout
+   reflow into something unplayable, it is covered until the phone comes back
+   up. Kept to short viewports so a desktop window — always "landscape" — and a
+   tablet are left alone. */
+#upright { display: none; }
+@media (orientation: landscape) and (max-height: 560px) {
+    #upright {
+        position: fixed; inset: 0; z-index: 200;
+        display: flex; align-items: center; justify-content: center;
+        padding: 20px;
+        background-color: var(--page);
+        background-image: radial-gradient(var(--page-dot) 1.2px, transparent 1.2px);
+        background-size: 7px 7px;
+    }
+}
+.upright-card {
+    max-width: 380px; padding: 18px 22px;
+    text-align: center; color: var(--panel-fg);
+}
+.upright-art { width: 58px; height: 58px; color: var(--ink); display: block; margin: 0 auto 4px; }
+.upright-card h3 {
+    margin: 0 0 4px; font-family: var(--font-display); font-weight: 400;
+    font-size: 27px; text-transform: uppercase; letter-spacing: .02em;
+}
+.upright-card p { margin: 0; font-size: 12.5px; font-weight: 700; color: var(--panel-fg-dim); }
 
 /* ============================================================
    MODAL
@@ -826,7 +861,7 @@ main {
             <div class="deck-top">
                 <div class="who" style="display:flex;align-items:center;gap:8px">
                     <div class="avatar" id="p2-deck-avatar"></div>
-                    <span class="label" style="font-size:12.5px;font-weight:700">PLAYER 2</span>
+                    <span class="label" style="font-size:12.5px;font-weight:700">P2</span>
                     <span class="turn-flag hide" id="p2-deck-turn">YOUR TURN</span>
                 </div>
                 <div class="deck-moves">
@@ -915,7 +950,7 @@ main {
             <div class="deck-top">
                 <div class="who" style="display:flex;align-items:center;gap:8px">
                     <div class="avatar is-p1" id="p1-avatar"></div>
-                    <span class="label" style="font-size:12.5px;font-weight:900">YOU</span>
+                    <span class="label" style="font-size:12.5px;font-weight:900" id="p1-name">YOU</span>
                     <span class="turn-flag" id="p1-turn">YOUR TURN</span>
                 </div>
                 <div class="deck-moves">
@@ -938,6 +973,21 @@ main {
 
 </main>
 
+<div id="upright" aria-hidden="true">
+    <div class="upright-card panel">
+        <svg viewBox="0 0 64 64" class="upright-art" fill="none" stroke="currentColor"
+             stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="19" y="8" width="26" height="46" rx="5"/>
+            <path d="M 28 13.5 h 8"/>
+            <circle cx="32" cy="47" r="1.8" fill="currentColor" stroke="none"/>
+            <path d="M 9 30 a 12 12 0 0 1 8 -11"/><path d="M 13.5 16 L 17.5 19.5 L 14 23.5"/>
+            <path d="M 55 34 a 12 12 0 0 1 -8 11"/><path d="M 50.5 48 L 46.5 44.5 L 50 40.5"/>
+        </svg>
+        <h3>Turn me upright</h3>
+        <p>Fingaz is a portrait game — two players, one phone, end to end.</p>
+    </div>
+</div>
+
 <div id="toss" hidden>
     <div class="toss-side toss-top">
         <div class="toss-name" id="toss-p2-name">Rival</div>
@@ -950,20 +1000,27 @@ main {
     </div>
     <div class="toss-side toss-bottom">
         <div class="die" id="die-p1"></div>
-        <div class="toss-name">You</div>
+        <div class="toss-name" id="toss-p1-name">You</div>
     </div>
 </div>
 
 <div id="stats" hidden>
     <div class="stats-card">
-        <h3>Record</h3>
-        <div class="stats-tally" id="stats-tally"></div>
-        <div class="stats-head">Choose your rival</div>
-        <div class="diff-row" id="diff-row"></div>
-        <div class="stats-head">Rival speed</div>
-        <div class="diff-row speed-row" id="speed-row"></div>
-        <div class="stats-head">Recent games</div>
-        <div class="stats-list" id="stats-list"></div>
+        <div class="stats-tabs" role="tablist">
+            <button class="btn stats-tab on" id="tab-record" role="tab" onclick="showStatsTab('record')">Record</button>
+            <button class="btn stats-tab" id="tab-setup" role="tab" onclick="showStatsTab('setup')">Rivals</button>
+        </div>
+        <div class="stats-pane" id="pane-record">
+            <div class="stats-tally" id="stats-tally"></div>
+            <div class="stats-head">Recent games</div>
+            <div class="stats-list" id="stats-list"></div>
+        </div>
+        <div class="stats-pane" id="pane-setup" hidden>
+            <div class="stats-head">Choose your rival</div>
+            <div class="diff-row" id="diff-row"></div>
+            <div class="stats-head">Rival speed</div>
+            <div class="diff-row speed-row" id="speed-row"></div>
+        </div>
         <button class="btn btn-gold stats-close" onclick="closeStats()">Back to the game</button>
     </div>
 </div>
@@ -1073,11 +1130,30 @@ const RIVAL_HANDS = {
         nail: '#4B2B4C', nailLine: '#2A162C',      // long, near-black claws
         cuff: '#BDB2CA', cuffShade: '#9A8DAB',     // grave wrappings, ends loose
         style: 'shroud'
+    },
+    taiga: {
+        skin: '#F6C79B', shade: '#E0A87C', line: '#463232',
+        nail: '#F0B49A', nailLine: '#C07F66',
+        cuff: '#F7F1E6', cuffShade: '#DCCFBC',     // taped knuckles, like the hero
+        style: 'wrap'
+    },
+    rin: {
+        skin: '#FFE7D4', shade: '#F0CFB6', line: '#3B3348',
+        nail: '#34C79A', nailLine: '#1F8E6D',      // green lacquer
+        cuff: '#6E51A8', cuffShade: '#4E3880',     // silk, tied in a bow
+        style: 'ribbon'
+    },
+    oni: {
+        skin: '#E8A188', shade: '#CE8069', line: '#3A2020',
+        nail: '#2A2434', nailLine: '#120E1B',      // blunt black claws
+        cuff: '#4A4050', cuffShade: '#2E2836',     // iron gauntlet
+        style: 'glove'
     }
 };
 
 /* the pastel behind each rival's hands */
-const FOE_SOFT = { momo: '#FCEFC6', rival: '#FFD8E2', yurei: '#E6E1F3', player2: '#FFD8E2' };
+const FOE_SOFT = { momo: '#FCEFC6', rival: '#FFD8E2', yurei: '#E6E1F3', player2: '#FFD8E2',
+                   taiga: '#FFE0C6', rin: '#E4DAF7', oni: '#FBCFC3' };
 
 function paletteFor(who) {
     if (who !== 'p2' || gameState.mode !== 'ai') return PALETTE[who];
@@ -1326,6 +1402,18 @@ const PORTRAITS = {
         bg: '#E6E2EF', hair: '#F3EEF9', hair2: '#C6BDD9', skin: '#FFF1E8', shade: '#EBD8CA',
         cloth: '#2A2434', cloth2: '#181321', eye: '#E0476B', ink: '#1A1524', trim: '#E0476B'
     },
+    taiga: {
+        bg: '#FFE2C9', hair: '#3C4A6B', hair2: '#28334D', skin: '#F6C79B', shade: '#DFA277',
+        cloth: '#E2553F', cloth2: '#B63B2A', eye: '#F4B32C', ink: '#241F2E', trim: '#E2553F'
+    },
+    rin: {
+        bg: '#E8DFF8', hair: '#9C7BD6', hair2: '#6E51A8', skin: '#FFE7D4', shade: '#EEC3A6',
+        cloth: '#3B3355', cloth2: '#272138', eye: '#34C79A', ink: '#241F2E', trim: '#34C79A'
+    },
+    oni: {
+        bg: '#F7C9BE', hair: '#7B2D26', hair2: '#551C18', skin: '#E8A188', shade: '#CE8069',
+        cloth: '#2A2434', cloth2: '#181321', eye: '#F4B32C', ink: '#1A1524', trim: '#F4B32C'
+    },
     player2: {
         bg: '#C9F2E4', hair: '#E2703A', hair2: '#B94F24', skin: '#FFDCC0', shade: '#F0B892',
         cloth: '#34C79A', cloth2: '#1F9576', eye: '#2C8F6F', ink: '#241F2E', trim: '#FFF1C4'
@@ -1499,20 +1587,108 @@ function portraitYurei(P, n) {
               fill="${P.cloth2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>`;
 }
 
+/* all elbows and enthusiasm — spiked hair under a headband */
+function portraitTaiga(P, n) {
+    return `
+        <path d="M 14 33 C 12 12, 23 3, 32 3 C 42 3, 52 12, 50 33
+                 C 48 23, 43 17, 32 17 C 21 17, 16 23, 14 33 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 21.5 27 q 4.5 -1.4 8 1 M 42.5 27 q -4.5 -1.4 -8 1"
+              fill="none" stroke="${P.ink}" stroke-width="1.7" stroke-linecap="round"/>
+        ${pEye(24.5, 34.5, P, true)}
+        ${pEye(39.5, 34.5, P, true)}
+        <path d="M 26.5 41.5 q 5.5 5 11 -.5" fill="none" stroke="${P.ink}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 14 31 C 13 12, 23 4, 32 4 C 41 4, 51 12, 50 31
+                 C 47 22, 42 17, 34 18 C 31 22, 29.5 26, 29 29.5 C 26 21, 19 19, 14.5 26 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 17 23 L 14.5 8 L 23 16 L 26.5 2 L 33 13 L 39 3 L 42.5 16 L 50 9 L 47.5 23 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 13.6 24 C 20 19, 44 19, 50.4 24 L 50 29.6 C 43 24.6, 21 24.6, 14 29.6 Z"
+              fill="${P.trim}" stroke="${P.ink}" stroke-width="1.6" stroke-linejoin="round"/>
+        <path d="M 49.5 24.5 L 59 20.5 L 56.5 27 L 61 31.5 L 50 29.5 Z"
+              fill="${P.trim}" stroke="${P.ink}" stroke-width="1.6" stroke-linejoin="round"/>`;
+}
+
+/* smiling, and a step ahead — topknot and a fox mask pushed up on one side */
+function portraitRin(P, n) {
+    return `
+        <path d="M 12 56 C 10 20, 21 2, 32 2 C 43 2, 54 20, 52 56
+                 L 44 52 C 46 34, 45 22, 42 16
+                 C 37 23, 27 23, 22 16
+                 C 19 22, 18 34, 20 52 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 32 1 C 38 1, 40 6, 37.5 9 C 35 12, 29 12, 26.5 9 C 24 6, 26 1, 32 1 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 21.5 27.5 q 4.5 -2 8 .2 M 42.5 27.5 q -4.5 -2 -8 .2"
+              fill="none" stroke="${P.ink}" stroke-width="1.5" stroke-linecap="round"/>
+        ${pEye(24.5, 34, P, true)}
+        ${pEye(39.5, 34, P, true)}
+        <path d="M 27 42.5 q 5.5 3.4 9.5 -1.4" fill="none" stroke="${P.ink}" stroke-width="1.7" stroke-linecap="round"/>
+        <path d="M 14 31 C 13.5 11, 23 4, 32 4 C 41 4, 50.5 11, 50 31
+                 C 47.5 21, 42 16.5, 35.5 17.5
+                 C 33.5 22, 33 26, 33 29.5
+                 C 29.5 20.5, 21 18.5, 14.5 26 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <g transform="rotate(-24 14 19)">
+            <path d="M 4 7 L 9.5 16 L 18.5 16 L 24 7 L 22 25 C 20 33, 8 33, 6 25 Z"
+                  fill="#FFF6EA" stroke="${P.ink}" stroke-width="1.8" stroke-linejoin="round"/>
+            <path d="M 8.5 20.5 L 12.5 20.5 M 15.5 20.5 L 19.5 20.5"
+                  fill="none" stroke="#E0476B" stroke-width="2.4" stroke-linecap="round"/>
+            <ellipse cx="14" cy="27.5" rx="2.6" ry="2" fill="${P.ink}"/>
+        </g>`;
+}
+
+/* the one you unlock last — horns, a bad scar and a worse grin */
+function portraitOni(P, n) {
+    return `
+        <path d="M 13 58 C 9 22, 19 1, 32 1 C 45 1, 55 22, 51 58
+                 L 44 53 C 46 33, 45 21, 42 15
+                 C 37 23, 27 23, 22 15
+                 C 19 21, 18 33, 20 53 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 18.5 15 C 12 10, 7.5 1.5, 10.5 .4 C 13.5 -0.6, 18 6.5, 21.5 12.5 Z"
+              fill="#F3E6D0" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 13.5 5.5 C 15.5 8, 17 10.5, 18.5 13" fill="none" stroke="${P.ink}"
+              stroke-width="1.1" stroke-linecap="round" opacity=".55"/>
+        <path d="M 45.5 15 C 52 10, 56.5 1.5, 53.5 .4 C 50.5 -0.6, 46 6.5, 42.5 12.5 Z"
+              fill="#F3E6D0" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 50.5 5.5 C 48.5 8, 47 10.5, 45.5 13" fill="none" stroke="${P.ink}"
+              stroke-width="1.1" stroke-linecap="round" opacity=".55"/>
+        ${pBase(P, n)}
+        <path d="M 20.5 26.5 q 5 -.4 8.5 2.4 M 43.5 26.5 q -5 -.4 -8.5 2.4"
+              fill="none" stroke="${P.ink}" stroke-width="2.1" stroke-linecap="round"/>
+        ${pEye(24.5, 34.5, P, true)}
+        ${pEye(39.5, 34.5, P, true)}
+        <path d="M 25 40.5 q 7 3.6 14 0 q -3 6 -7 6 q -4 0 -7 -6 Z"
+              fill="${P.ink}" stroke="${P.ink}" stroke-width="1.5" stroke-linejoin="round"/>
+        <path d="M 27.5 42.4 L 29.5 45.6 L 31.2 42.9 Z M 36.8 42.9 L 38.5 45.6 L 40.5 42.4 Z" fill="#FFF6EA"/>
+        <path d="M 13.5 33 C 13 11, 23 3, 32 3 C 41 3, 51 11, 50.5 33
+                 C 48 22, 43 16, 36 17.5
+                 C 34 22, 33.5 26, 33.5 30
+                 C 30 20, 21 17, 15 25 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 20 29 L 29 40.5" fill="none" stroke="${P.ink}" stroke-width="1.9" stroke-linecap="round"/>
+        <path d="M 21.5 31.5 L 23.5 30 M 25 36 L 27 34.5" fill="none" stroke="${P.ink}"
+              stroke-width="1.4" stroke-linecap="round"/>`;
+}
+
 const SWEAT = `<g class="sweat">
     <path d="M 52 17 C 55.5 22, 56.5 25, 54 27 C 51 28.5, 48.6 26, 49.6 23 C 50.2 21, 51 19, 52 17 Z"
           fill="#8ed0ff" stroke="#241f2e" stroke-width="1.4" stroke-linejoin="round"/>
     <path d="M 51.6 21.5 q 1 1.6 .4 3" fill="none" stroke="#ffffff" stroke-width="1.2" stroke-linecap="round" opacity=".8"/>
 </g>`;
 
+const PORTRAIT_ART = {
+    rival: portraitRival, player2: portraitPlayer2, momo: portraitMomo,
+    yurei: portraitYurei, taiga: portraitTaiga, rin: portraitRin, oni: portraitOni
+};
+
 function renderPortrait(kind) {
     const n = ++pid;
     const P = PORTRAITS[kind];
-    const art = kind === 'rival' ? portraitRival(P, n)
-              : kind === 'player2' ? portraitPlayer2(P, n)
-              : kind === 'momo' ? portraitMomo(P, n)
-              : kind === 'yurei' ? portraitYurei(P, n)
-              : portraitHero(P, n);
+    const art = (PORTRAIT_ART[kind] || portraitHero)(P, n);
     return `<svg viewBox="0 0 64 64" class="portrait" style="--blink-delay:${(n % 5) * 1.4}s">
         <rect width="64" height="64" fill="${P.bg}"/>${art}${SWEAT}</svg>`;
 }
@@ -2021,7 +2197,8 @@ let lastValues = { p1: { left: 1, right: 1 }, p2: { left: 1, right: 1 } };
 let lastFoeArt = null;
 
 const other = p => (p === 'p1' ? 'p2' : 'p1');
-const p2Label = () => (gameState.mode === 'ai' ? rival().name : 'Player 2');
+const p2Label = () => (gameState.mode === 'ai' ? rival().name : 'P2');
+const p1Label = () => (gameState.mode === 'pvp' ? 'P1' : 'You');
 
 /* ============================================================
    RENDER
@@ -2119,7 +2296,7 @@ function updateUI() {
     const line = gameState.mode === 'ai' ? gameState.rivalLine : null;
     status.textContent = line || (myTurn
         ? 'Waiting for your move…'
-        : (gameState.mode === 'ai' ? 'Plotting a move…' : 'Player 2’s turn!'));
+        : (gameState.mode === 'ai' ? 'Plotting a move…' : 'P2’s turn!'));
     status.classList.toggle('taunt', !!line);
 
     const foeArt = gameState.mode === 'ai' ? rival().art : 'player2';
@@ -2420,6 +2597,14 @@ const TAUNTS = {
         victory: ['I won?! Beginner\u2019s luck, honest!', 'Yay! Best of three?', 'I got lucky there!'],
         beaten: ['You were amazing!', 'Good game! Again?', 'Wow, you are really good at this.']
     },
+    scrappy: {
+        hit:  ['Hah! Straight through!', 'Too slow — keep those hands up!', 'Right where I wanted it.'],
+        ko:   ['One down, who is next?', 'That hand is toast!', 'Boom! Count it.'],
+        trim: ['Chop!', 'Trimmed you down to size!'],
+        hurt: ['Tch. Fluke.', 'Alright \u2014 now I am awake.', 'Do that again. I dare you.'],
+        victory: ['Told you I was ready!', 'Good scrap! Bring a better one.', 'Hah! Beat the apprentice first.'],
+        beaten: ['Rematch. Right now.', 'I was only warming up!', 'Fine \u2014 you earned it. Barely.']
+    },
     normal: {
         hit:  ['Take that!', 'You are wide open.', 'Keep up.'],
         ko:   ['One down!', 'That hand is finished.', 'Getting easier now.'],
@@ -2428,6 +2613,14 @@ const TAUNTS = {
         victory: ['Better luck next time.', 'Told you to keep up.', 'That is how it is done.'],
         beaten: ['Alright \u2014 you earned that one.', 'Not bad. Rematch?', 'Hmph. I want another go.']
     },
+    cunning: {
+        hit:  ['You looked away.', 'Oh dear. Was that one yours?', 'I did warn you. Sort of.'],
+        ko:   ['Gone, like a coin trick.', 'That hand is mine now.', 'Two hands. Well \u2014 one.'],
+        trim: ['Snip. A little off the top.', 'You will not miss those.'],
+        hurt: ['Mm. Cheeky.', 'You are learning. Slowly.', 'Careful \u2014 I might start trying.'],
+        victory: ['Like clockwork.', 'You played beautifully into it.', 'Again? You will lose again.'],
+        beaten: ['Well well. You were paying attention.', 'Cute. Do it twice.', 'I let you have that one, obviously.']
+    },
     hard: {
         hit:  ['Predictable.', 'Too slow.', 'Is that everything?'],
         ko:   ['Finished.', 'One hand left. Count it.', 'You never had a chance.'],
@@ -2435,6 +2628,14 @@ const TAUNTS = {
         hurt: ['...', 'Enjoy it while it lasts.', 'A minor setback.'],
         victory: ['Was that your best?', 'Predictable, from start to finish.', 'Do not waste my time again.'],
         beaten: ['\u2026Impossible.', 'Enjoy it. It will not happen twice.', 'You got lucky. Nothing more.']
+    },
+    brutal: {
+        hit:  ['Break.', 'You were finished before this.', 'Stay down.'],
+        ko:   ['Gone.', 'One hand. Then none.', 'Snapped.'],
+        trim: ['Less of you now.', 'Cut.'],
+        hurt: ['That was your best?', 'Hm.', 'Again. Harder.'],
+        victory: ['You were never in this.', 'Crawl away.', 'Do not come back.'],
+        beaten: ['\u2026You. How.', 'Impossible. AGAIN!', 'Remember this. I will.']
     }
 };
 
@@ -2507,10 +2708,30 @@ const SPEEDS = {
 let speed = 'steady';
 const pace = ms => Math.round(ms * (SPEEDS[speed] || SPEEDS.steady).k);
 
+/* Six rivals, easiest first — the order here is the order they appear in the
+   picker. `ai` is the whole of their play:
+     finish    — odds of taking a move that wins there and then
+     half      — odds of reviving a dead hand when it can
+     trim      — odds of spending Minus on a turn where it would help
+     trimBest  — weighs every pairing, rather than snipping at random
+     trimWipes — always takes a Minus that knocks a hand out outright
+     pick      — random: any legal attack
+                 kill:   prefers a knockout, ignores what it leaves open
+                 safe:   among those, the move that exposes it least
+                 hunt:   and of the safest, the one setting up the most kills */
 const RIVALS = {
-    easy:   { name: 'Momo',     title: 'the Apprentice', art: 'momo',  level: 'Easy' },
-    normal: { name: 'Kurogane', title: 'the Duelist',    art: 'rival', level: 'Normal' },
-    hard:   { name: 'Yurei',    title: 'the Phantom',    art: 'yurei', level: 'Hard' }
+    easy:    { name: 'Momo',     title: 'the Apprentice', art: 'momo',  level: 'Easy',
+               ai: { finish: .35, half: .5,  trim: .2,  trimBest: false, trimWipes: false, pick: 'random' } },
+    scrappy: { name: 'Taiga',    title: 'the Upstart',    art: 'taiga', level: 'Scrappy',
+               ai: { finish: .7,  half: .75, trim: .3,  trimBest: false, trimWipes: true,  pick: 'kill' } },
+    normal:  { name: 'Kurogane', title: 'the Duelist',    art: 'rival', level: 'Normal',
+               ai: { finish: 1,   half: 1,   trim: .45, trimBest: true,  trimWipes: true,  pick: 'kill' } },
+    cunning: { name: 'Rin',      title: 'the Trickster',  art: 'rin',   level: 'Cunning',
+               ai: { finish: 1,   half: 1,   trim: .7,  trimBest: true,  trimWipes: true,  pick: 'safe' } },
+    hard:    { name: 'Yurei',    title: 'the Phantom',    art: 'yurei', level: 'Hard',
+               ai: { finish: 1,   half: 1,   trim: .25, trimBest: true,  trimWipes: true,  pick: 'safe' } },
+    brutal:  { name: 'Oni',      title: 'the Warlord',    art: 'oni',   level: 'Brutal',
+               ai: { finish: 1,   half: 1,   trim: .35, trimBest: true,  trimWipes: true,  pick: 'hunt' } }
 };
 const rival = () => RIVALS[difficulty] || RIVALS.normal;
 let difficulty = 'normal';
@@ -2554,7 +2775,21 @@ function setDifficulty(d) {
     say(`${rival().name}, ${rival().title}, steps up.`);
 }
 
-function openStats() { playSound('tap'); document.getElementById('stats').hidden = false; renderStats(); }
+/* Record is what you open the card for; the rival and speed pickers live a tap
+   away rather than pushing the recent games off the bottom. */
+function showStatsTab(name) {
+    ['record', 'setup'].forEach(t => {
+        document.getElementById(`pane-${t}`).hidden = t !== name;
+        document.getElementById(`tab-${t}`).classList.toggle('on', t === name);
+    });
+}
+
+function openStats() {
+    playSound('tap');
+    document.getElementById('stats').hidden = false;
+    showStatsTab('record');
+    renderStats();
+}
 function closeStats() { playSound('tap'); document.getElementById('stats').hidden = true; }
 
 function renderStats() {
@@ -2620,7 +2855,14 @@ function cpuMoves() {
                 if (p2[pd] > 0 && after[pa] + p2[pd] >= 5) threats++;
             });
         });
-        out.push({ a, d, kills, wins: kills && yours.length === 1, threats });
+        // and what it sets up: its own knockouts on the board it leaves behind
+        let pressure = 0;
+        ['left', 'right'].forEach(pa => {
+            if (p2[pa] > 0) ['left', 'right'].forEach(pd => {
+                if (after[pd] > 0 && p2[pa] + after[pd] >= 5) pressure++;
+            });
+        });
+        out.push({ a, d, kills, wins: kills && yours.length === 1, threats, pressure });
     }
     return out;
 }
@@ -2632,43 +2874,32 @@ function cpuTurn() {
     const moves = cpuMoves();
     if (!moves.length) return;
 
+    const A = rival().ai;
     const rand = arr => arr[(Math.random() * arr.length) | 0];
     const go = m => executeAttack(m.a, m.d);
+
     const winning = moves.find(m => m.wins);
+    if (winning && Math.random() < A.finish) return go(winning);
 
-    if (difficulty === 'easy') {
-        // often misses the finish, rarely trims — beatable by a child
-        if (winning && Math.random() < .35) return go(winning);
-        if (canHalfSplit('p2') && Math.random() < .5) return triggerHalfSplit();
-        if (p2.abilities.subtraction && Math.random() < .2) {
-            const t = cpuTrimPick(true);
-            if (t) return cpuTrim(t.side, t.amount);
-        }
-        return go(rand(moves));
-    }
+    if (canHalfSplit('p2') && Math.random() < A.half) return triggerHalfSplit();
 
-    if (difficulty === 'hard') {
-        if (winning) return go(winning);
-        if (p2.abilities.subtraction) {
-            const t = cpuTrimPick();
-            if (t && (t.wipes || yours.length === 1)) return cpuTrim(t.side, t.amount);
-        }
-        if (canHalfSplit('p2')) return triggerHalfSplit();
-        // prefer a knockout, and among equals the move that leaves it least exposed
-        const kills = moves.filter(m => m.kills);
-        const pool = kills.length ? kills : moves;
-        const safest = Math.min(...pool.map(m => m.threats));
-        return go(rand(pool.filter(m => m.threats === safest)));
-    }
-
-    // normal
-    if (winning) return go(winning);
-    if (canHalfSplit('p2')) return triggerHalfSplit();
     if (p2.abilities.subtraction && yours.length) {
-        const t = cpuTrimPick();
-        if (t && (t.wipes || yours.length === 1 || Math.random() < .45)) return cpuTrim(t.side, t.amount);
+        const t = cpuTrimPick(!A.trimBest);
+        if (t && ((A.trimWipes && t.wipes) || Math.random() < A.trim)) return cpuTrim(t.side, t.amount);
     }
-    return go(moves.find(m => m.kills) || rand(moves));
+
+    if (A.pick === 'random') return go(rand(moves));
+
+    const kills = moves.filter(m => m.kills);
+    const pool = kills.length ? kills : moves;
+    if (A.pick === 'kill') return go(rand(pool));
+
+    const safest = Math.min(...pool.map(m => m.threats));
+    const safe = pool.filter(m => m.threats === safest);
+    if (A.pick === 'safe') return go(rand(safe));
+
+    const most = Math.max(...safe.map(m => m.pressure));
+    return go(rand(safe.filter(m => m.pressure === most)));
 }
 
 /* Minus costs the rival nothing but is worth only what one of its own hands
@@ -2748,6 +2979,7 @@ function openToss() {
     el.hidden = false;
     el.classList.toggle('solo', gameState.mode === 'ai');
     document.getElementById('toss-p2-name').textContent = p2Label();
+    document.getElementById('toss-p1-name').textContent = p1Label();
     const btn = document.getElementById('toss-roll');
     btn.disabled = false;
     btn.style.visibility = 'visible';
@@ -2944,6 +3176,7 @@ function applyMode(mode) {
     const pvp = mode === 'pvp';
     lastFoeArt = null;
     document.getElementById('p2-deck-avatar').innerHTML = renderPortrait('player2');
+    document.getElementById('p1-name').textContent = pvp ? 'P1' : 'YOU';
     document.getElementById('p2-deck').hidden = !pvp;
     document.getElementById('p2-nameplate').hidden = pvp;
     document.body.classList.toggle('pvp', pvp);
@@ -3006,6 +3239,10 @@ openToss();
 
 /* offline support only applies when served over http(s) — opening the file
    directly still works, it just skips this. */
+/* Installed to a home screen the manifest already pins portrait; this catches
+   the standalone cases where it does not, and is a no-op in a browser tab. */
+try { screen.orientation && screen.orientation.lock('portrait').catch(() => {}); } catch (e) { /* not allowed here */ }
+
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
