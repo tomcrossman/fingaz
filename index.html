@@ -335,6 +335,13 @@ body.pvp main { padding: 10px 12px 14px; }
 }
 .pip svg { width: 100%; height: 100%; display: block; }
 .pip.todo { opacity: .4; }
+.pip.unknown svg { filter: grayscale(1) brightness(.35) contrast(.7); }
+.pip.unknown::after {
+    content: '?';
+    position: absolute; inset: 0; z-index: 2;
+    display: grid; place-items: center;
+    font-family: var(--font-display); font-size: 17px; color: #fff;
+}
 .pip.now {
     width: 34px; height: 34px; border-radius: 11px;
     box-shadow: 0 0 0 3px var(--gold);
@@ -841,6 +848,11 @@ main {
 .stats-tally .v { display: block; line-height: 1.35; padding: 2px 4px 0; font-size: 32px; letter-spacing: .02em; }
 .stats-tally .p1 { color: var(--p1); }
 .stats-tally .p2 { color: var(--p2); }
+.stats-played {
+    margin: -8px 0 12px;
+    font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
+    text-align: center; color: var(--panel-fg-dim);
+}
 .stats-trophies {
     display: flex; align-items: center; justify-content: center; gap: 8px;
     padding: 8px 10px; margin: -6px 0 14px;
@@ -1212,6 +1224,7 @@ main {
         </div>
         <div class="stats-pane" id="pane-record">
             <div class="stats-tally" id="stats-tally"></div>
+            <div class="stats-played" id="stats-played"></div>
             <div class="stats-trophies" id="stats-trophies" hidden></div>
             <div class="stats-head">Recent games</div>
             <div class="stats-list" id="stats-list"></div>
@@ -2375,8 +2388,21 @@ function playSound(name) {
 const MUSIC_VOL = 0.115;
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
 
-const MOODS = {
-    /* driving shonen battle bed */
+/* One bed per rung of the ladder, so who you are fighting is audible before
+   you look up. Each is written once: the "last hand" version is derived from
+   it rather than written twice — see tighten(). */
+const THEMES = {
+    /* the first two: bright, bouncy, nothing to fear */
+    playful: {
+        bpm: 104,
+        prog: [{ bass: 48, notes: [60, 64, 67] },   // C
+               { bass: 43, notes: [59, 62, 67] },   // G
+               { bass: 45, notes: [57, 60, 64] },   // Am
+               { bass: 41, notes: [53, 57, 60] }],  // F
+        lead: { 0: 72, 6: 76, 10: 79, 16: 76, 24: 72, 32: 74, 38: 79, 46: 76, 48: 72, 56: 79 },
+        arp: .105, pad: .05, leadVol: .08, hats: true, kicks: [0, 8], bassEvery: 4
+    },
+    /* the middle of the ladder: the shonen bed the game grew up on */
     battle: {
         bpm: 112,
         prog: [{ bass: 45, notes: [57, 60, 64] },   // Am
@@ -2386,19 +2412,66 @@ const MOODS = {
         lead: { 0: 69, 6: 72, 10: 76, 16: 74, 22: 72, 26: 69, 32: 76, 38: 79, 42: 76, 48: 74, 54: 71, 58: 74 },
         arp: .1, pad: .055, leadVol: .075, hats: true, kicks: [0, 8], bassEvery: 4
     },
-    /* one hand from the end — quicker, a semitone ostinato where the tune was,
-       and a bass that pulses instead of sitting. Same key as the battle bed so
-       it tightens rather than cuts. */
-    tense: {
-        bpm: 138,
+    /* slower and weightier, for the ones who do not move */
+    heavy: {
+        bpm: 98,
+        prog: [{ bass: 40, notes: [55, 59, 64] },   // Em
+               { bass: 40, notes: [55, 60, 64] },
+               { bass: 38, notes: [53, 57, 62] },   // Dm
+               { bass: 43, notes: [55, 59, 62] }],  // G
+        lead: { 0: 64, 12: 67, 16: 69, 30: 67, 32: 62, 44: 65, 48: 67, 60: 64 },
+        arp: .07, pad: .085, leadVol: .07, hats: true, kicks: [0, 4, 8, 12], bassEvery: 4
+    },
+    /* the half step up bites — for the two who enjoy it */
+    dark: {
+        bpm: 122,
         prog: [{ bass: 45, notes: [57, 60, 64] },   // Am
-               { bass: 46, notes: [58, 62, 65] },   // Bb — the half step up bites
+               { bass: 46, notes: [58, 62, 65] },   // Bb
                { bass: 45, notes: [57, 60, 64] },   // Am
                { bass: 40, notes: [56, 59, 64] }],  // E
-        lead: { 0: 69, 10: 68, 16: 69, 26: 68, 32: 69, 42: 68, 48: 69, 56: 68 },
-        arp: .085, pad: .05, leadVol: .07, hats: true,
-        kicks: [0, 3, 8, 11], bassEvery: 2, bassDur: 1.6
+        lead: { 0: 69, 8: 68, 16: 72, 24: 68, 32: 69, 40: 65, 48: 68, 56: 64 },
+        arp: .09, pad: .06, leadVol: .075, hats: true, kicks: [0, 6, 8, 14], bassEvery: 4
     },
+    /* the top of the ladder: low, wide and coming for you */
+    boss: {
+        bpm: 130,
+        prog: [{ bass: 38, notes: [53, 57, 62] },   // Dm
+               { bass: 46, notes: [58, 62, 65] },   // Bb
+               { bass: 41, notes: [53, 57, 60] },   // F
+               { bass: 45, notes: [57, 61, 64] }],  // A  — the raised third
+        lead: { 0: 62, 6: 65, 12: 69, 16: 68, 24: 65, 32: 74, 38: 73, 44: 69, 48: 65, 56: 61 },
+        arp: .1, pad: .07, leadVol: .085, hats: true, kicks: [0, 3, 8, 11, 14], bassEvery: 2, bassDur: 2.4
+    }
+};
+
+/* The same bed with the screws turned: quicker, a semitone ostinato where the
+   tune was, and a pulsing bass. Derived, so every theme gets one for free and
+   they always stay in the same key as what they tighten. */
+const TIGHTENED = {};
+
+function ostinato(M) {
+    const top = M.prog[0].notes[0] + 12;
+    const out = {};
+    for (let i = 0; i < 64; i += 8) out[i] = (i % 16 === 0) ? top : top - 1;
+    return out;
+}
+
+function tighten(key) {
+    if (TIGHTENED[key]) return TIGHTENED[key];
+    const M = THEMES[key];
+    return (TIGHTENED[key] = {
+        ...M,
+        bpm: Math.round(M.bpm * 1.22),
+        lead: ostinato(M),
+        arp: M.arp * .85,
+        leadVol: M.leadVol * .95,
+        kicks: [0, 3, 8, 11],
+        bassEvery: 2,
+        bassDur: 1.6
+    });
+}
+
+const MOODS = {
     /* bright and triumphant */
     victory: {
         bpm: 128,
@@ -2422,7 +2495,15 @@ const MOODS = {
 };
 
 let musicMood = 'battle';
-const mood = () => MOODS[musicMood];
+
+/* hot-seat has no rival, so it keeps the house bed */
+function themeKey() {
+    if (gameState.mode === 'pvp') return 'battle';
+    return (RIVALS[difficulty] || {}).theme || 'battle';
+}
+
+const mood = () => MOODS[musicMood]
+    || (musicMood === 'tense' ? tighten(themeKey()) : THEMES[themeKey()]);
 const stepDur = () => 60 / mood().bpm / 4;
 
 const ARP = [0, 1, 2, 1, 0, 2, 1, 2, 0, 1, 2, 1, 2, 1, 0, 1];
@@ -2521,8 +2602,16 @@ function setMood(name) {
 
 /* The bed tracks how close the match is: once either player is down to their
    last hand it switches to the tense mood, and back if a Half revives one. */
+let lastTheme = null;
+
 function refreshMood() {
     if (musicMood === 'victory' || musicMood === 'defeat') return;
+    // a new rival means a new bed, even if the mood name has not changed
+    if (lastTheme !== themeKey()) {
+        lastTheme = themeKey();
+        stepIndex = 0;
+        if (audioCtx && musicTimer) nextStepTime = audioCtx.currentTime + .05;
+    }
     const alive = p => (p.left > 0 ? 1 : 0) + (p.right > 0 ? 1 : 0);
     const mine = alive(gameState.p1), theirs = alive(gameState.p2);
     if (!mine || !theirs) return;               // match is over — win/lose music has it
@@ -2968,6 +3057,8 @@ function triggerHalfSplit() {
    ============================================================ */
 const TAUNTS = {
     easy: {
+        rattled: ['Oh no. You again\u2026', 'Please go easy on me this time!'],
+        smug: ['Hehe \u2014 I am good at this now!', 'Maybe try someone easier?'],
         hit:  ['Ooh, got you!', 'Hehe, my turn was fun.', 'Take that… I think?'],
         ko:   ['Wow, I did it!', 'Did you see that?!', 'Lucky me!'],
         trim: ['Snip snip!', 'Sorry about that!'],
@@ -2976,6 +3067,8 @@ const TAUNTS = {
         beaten: ['You were amazing!', 'Good game! Again?', 'Wow, you are really good at this.']
     },
     scrappy: {
+        rattled: ['You again. I have been practising.', 'This time I am ready. Probably.'],
+        smug: ['Back for another? Brave.', 'I have got your number.'],
         hit:  ['Hah! Straight through!', 'Too slow — keep those hands up!', 'Right where I wanted it.'],
         ko:   ['One down, who is next?', 'That hand is toast!', 'Boom! Count it.'],
         trim: ['Chop!', 'Trimmed you down to size!'],
@@ -2984,6 +3077,8 @@ const TAUNTS = {
         beaten: ['Rematch. Right now.', 'I was only warming up!', 'Fine \u2014 you earned it. Barely.']
     },
     keen: {
+        rattled: ['I have studied your last three wins.', 'My notes on you are extensive.'],
+        smug: ['You are becoming my best subject.', 'Shall I explain what you keep doing wrong?'],
         hit:  ['I practised that one.', 'Textbook.', 'Noted, and countered.'],
         ko:   ['One hand down, as drilled.', 'That is the training working.', 'Next!'],
         trim: ['Trimming. Neatly.', 'Precision first.'],
@@ -2992,6 +3087,8 @@ const TAUNTS = {
         beaten: ['Back to the drills.', 'You are my homework now.', 'Again? I learn fast.']
     },
     normal: {
+        rattled: ['Do not get comfortable.', 'Three is not a pattern.'],
+        smug: ['Again? Very well.', 'You know how this ends.'],
         hit:  ['Take that!', 'You are wide open.', 'Keep up.'],
         ko:   ['One down!', 'That hand is finished.', 'Getting easier now.'],
         trim: ['Snip. Much better.', 'Let me trim that for you.'],
@@ -3000,6 +3097,8 @@ const TAUNTS = {
         beaten: ['Alright \u2014 you earned that one.', 'Not bad. Rematch?', 'Hmph. I want another go.']
     },
     stubborn: {
+        rattled: ['You keep moving me. Curious.', 'Hm. Again.'],
+        smug: ['Still pushing.', 'Nothing has changed.'],
         hit:  ['Move.', 'Still standing.', 'Push harder.'],
         ko:   ['Down.', 'One less.', 'Hm.'],
         trim: ['Cut.', 'Trimmed.'],
@@ -3008,6 +3107,8 @@ const TAUNTS = {
         beaten: ['\u2026You moved me.', 'First time for that.', 'Good. Again.']
     },
     cunning: {
+        rattled: ['You have got my measure. Annoying.', 'Fine \u2014 no more games. Some games.'],
+        smug: ['Oh good. My favourite.', 'Shall we do the one where you lose?'],
         hit:  ['You looked away.', 'Oh dear. Was that one yours?', 'I did warn you. Sort of.'],
         ko:   ['Gone, like a coin trick.', 'That hand is mine now.', 'Two hands. Well \u2014 one.'],
         trim: ['Snip. A little off the top.', 'You will not miss those.'],
@@ -3016,6 +3117,8 @@ const TAUNTS = {
         beaten: ['Well well. You were paying attention.', 'Cute. Do it twice.', 'I let you have that one, obviously.']
     },
     reckless: {
+        rattled: ['Yesss \u2014 the one who bites back!', 'Hsss! You again. Wonderful.'],
+        smug: ['Back for more? Delicious.', 'You never learn. I adore that.'],
         hit:  ['Sssplendid!', 'Oh, that had to sting.', 'More! Again!'],
         ko:   ['One down \u2014 delicious.', 'Snap!', 'Gone, just like that.'],
         trim: ['A little off, yes?', 'Snip snip. Sssweet.'],
@@ -3024,6 +3127,8 @@ const TAUNTS = {
         beaten: ['You gambled better. Rude.', 'Hsss. Lucky.', 'Again! Double or nothing!']
     },
     hard: {
+        rattled: ['\u2026You keep coming back.', 'Three. I am counting now.'],
+        smug: ['Still here.', 'You cannot win. You have proved it.'],
         hit:  ['Predictable.', 'Too slow.', 'Is that everything?'],
         ko:   ['Finished.', 'One hand left. Count it.', 'You never had a chance.'],
         trim: ['Precision.', 'Snip.'],
@@ -3032,6 +3137,8 @@ const TAUNTS = {
         beaten: ['\u2026Impossible.', 'Enjoy it. It will not happen twice.', 'You got lucky. Nothing more.']
     },
     ruthless: {
+        rattled: ['My count keeps missing you.', 'Recalibrating. For you.'],
+        smug: ['Same spacing, same result.', 'I have you measured.'],
         hit:  ['One shot.', 'Measured.', 'Already counted.'],
         ko:   ['Clean.', 'Range confirmed.', 'Done.'],
         trim: ['Adjusted.', 'Trimmed to fit.'],
@@ -3040,6 +3147,8 @@ const TAUNTS = {
         beaten: ['My count was wrong.', 'Rare. Well played.', 'I will adjust.']
     },
     brutal: {
+        rattled: ['YOU. Again.', 'This does not happen.'],
+        smug: ['You come back to be broken.', 'Again, then.'],
         hit:  ['Break.', 'You were finished before this.', 'Stay down.'],
         ko:   ['Gone.', 'One hand. Then none.', 'Snapped.'],
         trim: ['Less of you now.', 'Cut.'],
@@ -3049,9 +3158,43 @@ const TAUNTS = {
     }
 };
 
+/* The current run of results against one rival, read back from the history —
+   no new storage, and it stops at the first result that breaks the run. */
+function streakVs(key) {
+    let mine = 0, theirs = 0;
+    for (let i = history.length - 1; i >= 0; i--) {
+        const h = history[i];
+        if (h.m === 'pvp' || h.d !== key) continue;
+        if (h.w === 'p1') { if (theirs) break; mine++; }
+        else              { if (mine)   break; theirs++; }
+    }
+    return { mine, theirs };
+}
+
+const GRUDGE_AT = 3;
+
+/* rattled when you are on a run against them, smug when they are on one
+   against you — and nothing at all until it is a run worth mentioning */
+function grudgeMood(key) {
+    const s = streakVs(key);
+    if (s.mine >= GRUDGE_AT) return 'rattled';
+    if (s.theirs >= GRUDGE_AT) return 'smug';
+    return null;
+}
+
+function pick(set) { return set && set.length ? set[(Math.random() * set.length) | 0] : ''; }
+
 function taunt(kind) {
-    const set = (TAUNTS[difficulty] || TAUNTS.normal)[kind];
-    return set && set.length ? set[(Math.random() * set.length) | 0] : '';
+    return pick((TAUNTS[difficulty] || TAUNTS.normal)[kind]);
+}
+
+/* what a rival says when they step up: the grudge if there is one, otherwise
+   the plain introduction */
+function introLine(key = difficulty) {
+    const mood = grudgeMood(key);
+    const line = mood && pick((TAUNTS[key] || {})[mood]);
+    const r = RIVALS[key] || RIVALS.normal;
+    return { text: line || `${r.name}, ${r.title}, steps up.`, says: !!line };
 }
 
 let shoutHold = null, shoutClear = null;
@@ -3130,25 +3273,25 @@ const pace = ms => Math.round(ms * (SPEEDS[speed] || SPEEDS.steady).k);
                  safe:   among those, the move that exposes it least
                  hunt:   and of the safest, the one setting up the most kills */
 const RIVALS = {
-    easy:      { name: 'Momo',     title: 'the Apprentice', art: 'momo',   level: 'Easy',
+    easy:      { name: 'Momo',     title: 'the Apprentice', art: 'momo',   level: 'Easy', theme: 'playful',
                  ai: { finish: .35, half: .5,  trim: .2,  trimBest: false, trimWipes: false, pick: 'random' } },
-    scrappy:   { name: 'Taiga',    title: 'the Upstart',    art: 'taiga',  level: 'Scrappy',
+    scrappy:   { name: 'Taiga',    title: 'the Upstart',    art: 'taiga',  level: 'Scrappy', theme: 'playful',
                  ai: { finish: .7,  half: .75, trim: .3,  trimBest: false, trimWipes: true,  pick: 'kill' } },
-    keen:      { name: 'Hana',     title: 'the Understudy', art: 'hana',   level: 'Keen',
+    keen:      { name: 'Hana',     title: 'the Understudy', art: 'hana',   level: 'Keen', theme: 'battle',
                  ai: { finish: .85, half: .9,  trim: .35, trimBest: true,  trimWipes: true,  pick: 'kill' } },
-    normal:    { name: 'Kurogane', title: 'the Duelist',    art: 'rival',  level: 'Normal',
+    normal:    { name: 'Kurogane', title: 'the Duelist',    art: 'rival',  level: 'Normal', theme: 'battle',
                  ai: { finish: 1,   half: 1,   trim: .45, trimBest: true,  trimWipes: true,  pick: 'kill' } },
-    stubborn:  { name: 'Tetsu',    title: 'the Wall',       art: 'tetsu',  level: 'Stubborn',
+    stubborn:  { name: 'Tetsu',    title: 'the Wall',       art: 'tetsu',  level: 'Stubborn', theme: 'heavy',
                  ai: { finish: 1,   half: 1,   trim: .05, trimBest: true,  trimWipes: true,  pick: 'safe' } },
-    cunning:   { name: 'Rin',      title: 'the Trickster',  art: 'rin',    level: 'Cunning',
+    cunning:   { name: 'Rin',      title: 'the Trickster',  art: 'rin',    level: 'Cunning', theme: 'heavy',
                  ai: { finish: 1,   half: 1,   trim: .7,  trimBest: true,  trimWipes: true,  pick: 'safe' } },
-    reckless:  { name: 'Hebi',     title: 'the Serpent',    art: 'hebi',   level: 'Reckless',
+    reckless:  { name: 'Hebi',     title: 'the Serpent',    art: 'hebi',   level: 'Reckless', theme: 'dark',
                  ai: { finish: 1,   half: .6,  trim: .5,  trimBest: true,  trimWipes: true,  pick: 'greedy' } },
-    hard:      { name: 'Yurei',    title: 'the Phantom',    art: 'yurei',  level: 'Hard',
+    hard:      { name: 'Yurei',    title: 'the Phantom',    art: 'yurei',  level: 'Hard', theme: 'dark',
                  ai: { finish: 1,   half: 1,   trim: .25, trimBest: true,  trimWipes: true,  pick: 'safe' } },
-    ruthless:  { name: 'Kage',     title: 'the Sniper',     art: 'kage',   level: 'Ruthless',
+    ruthless:  { name: 'Kage',     title: 'the Sniper',     art: 'kage',   level: 'Ruthless', theme: 'boss',
                  ai: { finish: 1,   half: 1,   trim: .3,  trimBest: true,  trimWipes: true,  pick: 'sniper' } },
-    brutal:    { name: 'Oni',      title: 'the Warlord',    art: 'oni',    level: 'Brutal',
+    brutal:    { name: 'Oni',      title: 'the Warlord',    art: 'oni',    level: 'Brutal', theme: 'boss',
                  ai: { finish: 1,   half: 1,   trim: .35, trimBest: true,  trimWipes: true,  pick: 'hunt' } }
 };
 const rival = () => RIVALS[difficulty] || RIVALS.normal;
@@ -3161,7 +3304,8 @@ const ROSTER = Object.keys(RIVALS);
 const TOURNEY_ROUNDS = 5;
 
 function drawTourneyLadder() {
-    const pool = ROSTER.filter(isUnlocked);
+    // the whole ladder, unlocked or not — a run is how you meet the rest
+    const pool = ROSTER.slice();
     const per = Math.max(1, Math.floor(pool.length / TOURNEY_ROUNDS));
     const out = [];
     for (let i = 0; i < TOURNEY_ROUNDS; i++) {
@@ -3175,19 +3319,44 @@ function drawTourneyLadder() {
    one along steps up. Stored in its own right rather than counted back out of
    the match history, which only keeps the last 60 games. */
 const STARTING_ROSTER = ROSTER.slice(0, 3);
-const TOURNEY_UNLOCK_AT = 5;
+/* Time at the board: it runs only while a match is actually live and the page
+   is in front of you, so menus, the toss and a phone in a pocket do not count. */
+let playMs = 0, playFrom = null;
+
+function playClockOn() { if (playFrom === null) playFrom = Date.now(); }
+function playClockOff() {
+    if (playFrom === null) return;
+    playMs += Date.now() - playFrom;
+    playFrom = null;
+    persist();
+}
+const playTotal = () => playMs + (playFrom === null ? 0 : Date.now() - playFrom);
+
+function playedLabel(ms) {
+    const mins = Math.floor(ms / 60000);
+    if (mins < 1) return 'under a minute';
+    if (mins < 60) return `${mins} min`;
+    const h = Math.floor(mins / 60);
+    return `${h}h ${mins % 60}m`;
+}
+
 let unlocked = STARTING_ROSTER.slice();
 let pendingChallenger = null;   // earned mid-run; shown once the run is over
 
 const isUnlocked = k => unlocked.includes(k);
-const tourneyOpen = () => unlocked.length >= TOURNEY_UNLOCK_AT;
 
-function unlockNextAfter(key) {
-    const next = ROSTER[ROSTER.indexOf(key) + 1];
-    if (!next || isUnlocked(next)) return null;
-    unlocked.push(next);
+function unlock(key) {
+    if (!key || isUnlocked(key)) return null;
+    unlocked.push(key);
     persist();
-    return next;
+    return key;
+}
+
+/* Beating a rival in an ordinary match opens the next one along. Beat one in a
+   tourney — where the draw reaches past what you have earned — and you have
+   earned that one instead. */
+function unlockFromWin(key) {
+    return tourney ? unlock(key) : unlock(ROSTER[ROSTER.indexOf(key) + 1]);
 }
 
 let tourney = null;        // { stage, order } while a run is on
@@ -3203,6 +3372,7 @@ function loadSaved() {
         if (RIVALS[d]) difficulty = d;
         const sp = localStorage.getItem('fingaz-speed');
         if (SPEEDS[sp]) speed = sp;
+        playMs = Math.max(0, parseInt(localStorage.getItem('fingaz-playms') || '0', 10) || 0);
         const un = JSON.parse(localStorage.getItem('fingaz-unlocked') || 'null');
         if (Array.isArray(un)) unlocked = ROSTER.filter(k => un.includes(k) || STARTING_ROSTER.includes(k));
         if (!isUnlocked(difficulty)) difficulty = STARTING_ROSTER[STARTING_ROSTER.length - 1];
@@ -3214,6 +3384,7 @@ function persist() {
         localStorage.setItem('fingaz-diff', (tourney && pickedDiff) || difficulty);
         localStorage.setItem('fingaz-speed', speed);
         localStorage.setItem('fingaz-unlocked', JSON.stringify(unlocked));
+        localStorage.setItem('fingaz-playms', String(Math.round(playTotal())));
     } catch (e) { /* file:// or private mode — session-only is fine */ }
 }
 function recordResult(winner) {
@@ -3229,13 +3400,35 @@ function setSpeed(k) {
     renderStats();
 }
 
-function setDifficulty(d) {
+/* a board that is not still 1-1 with both specials in hand is a match underway */
+function matchInProgress() {
+    const untouched = p => p.left === 1 && p.right === 1 && p.abilities.subtraction && p.abilities.team;
+    return !(untouched(gameState.p1) && untouched(gameState.p2));
+}
+
+function swapRival(d) {
     difficulty = d;
-    playSound('select');
     persist();
-    renderStats();
-    updateUI();            // swap in that rival's name and portrait
-    say(`${rival().name}, ${rival().title}, steps up.`);
+    closeStats();
+    // the new rival starts from 1-1 like anyone else, rather than inheriting
+    // the board you were in the middle of
+    gameState.scores = { p1: 0, p2: 0 };
+    resetGame();
+    const intro = introLine(d);
+    say(intro.says ? `\u201c${intro.text}\u201d` : intro.text);
+}
+
+function setDifficulty(d) {
+    if (d === difficulty) return;
+    playSound('select');
+    if (!matchInProgress()) return swapRival(d);
+    openSheet(
+        `Switch to ${RIVALS[d].name}?`,
+        'The match you are in starts again from scratch, and the score resets.',
+        [{ label: `Bring on ${RIVALS[d].name}`, action: () => swapRival(d) },
+         { label: 'Keep playing', ghost: true, action: closeSheet }],
+        RIVALS[d].art, true, 'p1', false
+    );
 }
 
 /* Record is what you open the card for; the rival and speed pickers live a tap
@@ -3263,6 +3456,9 @@ function renderStats() {
         <div class="col"><span class="who">You</span><span class="v p1">${wins}</span></div>
         <div class="col"><span class="who">played</span><span class="v" style="opacity:.35">${history.length}</span></div>
         <div class="col"><span class="who">Rival</span><span class="v p2">${losses}</span></div>`;
+    document.getElementById('stats-played').textContent =
+        `${history.length} ${history.length === 1 ? 'game' : 'games'} \u00b7 ${playedLabel(playTotal())} played`;
+
     const cup = document.getElementById('stats-trophies');
     cup.hidden = !trophies;
     cup.innerHTML = trophies
@@ -3330,7 +3526,13 @@ function renderTourneyBar() {
         `Round ${tourney.stage + 1} of ${tourney.order.length}`;
     document.getElementById('tourney-pips').innerHTML = tourney.order.map((k, i) => {
         const state = i < tourney.stage ? 'done' : i === tourney.stage ? 'now' : 'todo';
-        return `<div class="pip ${state}" title="${RIVALS[k].name}">${renderPortrait(RIVALS[k].art)}</div>`;
+        // someone you have not earned yet stays a shadow until the round they
+        // step up in — the run is the introduction
+        const unknown = !isUnlocked(k) && i > tourney.stage;
+        return `<div class="pip ${state}${unknown ? ' unknown' : ''}"
+                     title="${unknown ? 'Someone you have not met' : RIVALS[k].name}">
+                    ${renderPortrait(RIVALS[k].art)}
+                </div>`;
     }).join('');
 }
 
@@ -3420,12 +3622,13 @@ function tourneyAdvance() {
     difficulty = tourney.order[tourney.stage];
     renderTourneyBar();
     const r = rival();
+    const intro = introLine();
     closeSheet();
     openSheet(
         `Round ${tourney.stage + 1}`,
-        `${r.name}, ${r.title}, steps up.`,
+        intro.text,
         [{ label: 'Fight', action: resetGame }],
-        r.art, true, 'p1', false
+        r.art, true, 'p1', intro.says
     );
 }
 
@@ -3697,6 +3900,7 @@ function resolveToss() {
 }
 
 function beginPlay(first) {
+    playClockOn();
     document.getElementById('toss').hidden = true;
     ['die-p1', 'die-p2'].forEach(id => document.getElementById(id).classList.remove('won', 'rolling'));
     toss.active = false;
@@ -3719,8 +3923,9 @@ function checkWin() {
 
     const youWon = p2Out;
     gameState.locked = true;
+    playClockOff();
     // beating a rival opens the next one along; mid-run it waits for the run
-    const earned = (youWon && gameState.mode === 'ai') ? unlockNextAfter(difficulty) : null;
+    const earned = (youWon && gameState.mode === 'ai') ? unlockFromWin(difficulty) : null;
     if (earned && tourney) pendingChallenger = earned;
     // a round of a tourney is not a game on its own — the run is recorded at its end
     if (!tourney) recordResult(youWon ? 'p1' : 'p2');
@@ -3763,6 +3968,7 @@ function checkWin() {
 }
 
 function resetGame() {
+    playClockOff();          // whatever was underway is over
     hideShout();
     renderTourneyBar();
     gameState.turn = 'p1';
@@ -3882,13 +4088,13 @@ const MODE_PITCH = {
     ai:      { label: 'VS CPU',   icon: 'rivalFace', line: `one rival, your pick.` },
     pvp:     { label: '2 player', icon: 'phoneSwap', line: 'pass one phone between you, decks facing each other.' },
     tourney: { label: 'Tourney',  icon: 'trophy',
-               line: `${TOURNEY_ROUNDS} rivals drawn fresh from the ${ROSTER.length} \u2014 lose once and the run is over.` }
+               line: `${TOURNEY_ROUNDS} rivals drawn fresh from all ${ROSTER.length} \u2014 lose once and the run is over.` }
 };
 
 document.getElementById('mode-btn').addEventListener('click', () => {
     playSound('tap');
     const current = tourney ? 'tourney' : gameState.mode;
-    const others = Object.keys(MODE_PITCH).filter(m => m !== current && modeAvailable(m));
+    const others = Object.keys(MODE_PITCH).filter(m => m !== current);
     openSheet(
         'Change mode?',
         others.map(m => `${MODE_PITCH[m].label} \u2014 ${MODE_PITCH[m].line}`).join('\n') +
@@ -3929,6 +4135,16 @@ function tryStartMusic() {
 }
 MUSIC_GESTURES.forEach(ev => addEventListener(ev, tryStartMusic, { passive: true }));
 
+addEventListener('visibilitychange', () => {
+    if (document.hidden) return playClockOff();
+    const live = !toss.active
+        && !gameState.locked
+        && document.getElementById('start').hidden
+        && document.getElementById('challenger').hidden;
+    if (live) playClockOn();
+});
+addEventListener('pagehide', playClockOff);
+
 document.getElementById('score-btn').addEventListener('click', () => openStats());
 
 /* the face you are playing is the most obvious place to ask for a different
@@ -3942,17 +4158,11 @@ function startMode(mode) {
     applyMode(mode);
 }
 
-function modeAvailable(k) { return k !== 'tourney' || tourneyOpen(); }
-function modeLine(k) {
-    return modeAvailable(k) ? MODE_PITCH[k].line
-        : `locked \u2014 unlock ${TOURNEY_UNLOCK_AT} rivals to open it (you have ${unlocked.length}).`;
-}
-
 function paintStartModes() {
     document.getElementById('start-modes').innerHTML = Object.entries(MODE_PITCH).map(([k, m]) =>
-        `<button class="btn ${k === 'tourney' ? 'btn-gold' : k === 'pvp' ? 'btn-p2' : 'btn-p1'}${modeAvailable(k) ? '' : ' locked'}"
-                 ${modeAvailable(k) ? `onclick="startMode('${k}')"` : 'disabled'}>
-            <span class="t">${ICONS[m.icon]}${m.label}</span><span class="d">${modeLine(k)}</span>
+        `<button class="btn ${k === 'tourney' ? 'btn-gold' : k === 'pvp' ? 'btn-p2' : 'btn-p1'}"
+                 onclick="startMode('${k}')">
+            <span class="t">${ICONS[m.icon]}${m.label}</span><span class="d">${m.line}</span>
          </button>`).join('');
 }
 paintStartModes();
