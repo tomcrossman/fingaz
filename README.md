@@ -10,11 +10,14 @@ Open `index.html`, or visit the hosted version.
 - Tap one of your hands, then a rival hand. Your fingers are added to theirs.
 - **5 or more** knocks that hand out for good.
 - **Shift** slides fingers between your own hands. **Half** revives a dead hand.
-- **Minus** and **Team** are one-shot specials.
+- **Minus** and **Team** are one-shot specials. Minus snips a rival hand by
+  as many fingers as you are holding on one of your own.
 - A dice roll decides who goes first.
 
-Play the CPU — Momo, Kurogane or Yurei — or hand the phone back and forth
-in 2-player mode, where the second deck is rotated for the player opposite.
+Play the CPU — six rivals from Momo the Apprentice up to Oni the Warlord,
+each with their own head for the game — or hand the phone back and forth in
+2-player mode, where the second deck is rotated for the player opposite and
+the header moves to a rail down the side so both players can read it.
 
 ## Put it on the web with GitHub Pages
 
