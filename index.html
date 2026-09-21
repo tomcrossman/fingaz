@@ -247,7 +247,13 @@ body.pvp main { padding: 10px 12px 14px; }
 }
 .start-modes { display: flex; flex-direction: column; gap: 10px; }
 .start-modes .btn { flex-direction: column; gap: 3px; padding: 12px 10px; }
-.start-modes .btn .t { font-family: var(--font-display); font-size: 21px; font-weight: 400; letter-spacing: .02em; }
+.start-modes .btn .t {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: var(--font-display); font-size: 21px; font-weight: 400; letter-spacing: .02em;
+}
+.start-modes .btn .icon { width: 21px; height: 21px; }
+.act-ic { display: inline-flex; flex: none; }
+.act-ic .icon { width: 17px; height: 17px; }
 .start-modes .btn .d { font-size: 10px; font-weight: 700; opacity: .62; line-height: 1.35; }
 
 /* the ladder: who is beaten, who is in front of you, who is still waiting */
@@ -326,6 +332,8 @@ main {
     padding: 0;
 }
 .avatar .portrait { width: 100%; height: 100%; display: block; }
+#p2-avatar { cursor: pointer; transition: transform .08s ease; }
+#p2-avatar:active { transform: scale(.92); }
 
 /* portraits blink, sweat when they lose a hand, and gloat when they take one */
 .portrait .lid {
@@ -947,7 +955,7 @@ main {
 <div id="whiteflash"></div>
 
 <header>
-    <h1 class="logo-title">Fingaz</h1>
+    <h1 class="logo-title">Fingaz!</h1>
     <button class="scoreline" id="score-btn" title="Record & difficulty">
         <span class="s1" id="score-p1">0</span>
         <span class="dash">—</span>
@@ -992,7 +1000,7 @@ main {
 
         <div class="nameplate" id="p2-nameplate">
             <div class="who">
-                <div class="avatar" id="p2-avatar"></div>
+                <div class="avatar" id="p2-avatar" title="Choose your rival"></div>
                 <div>
                     <div class="label">
                         <span id="p2-name">Rival</span>
@@ -1086,7 +1094,7 @@ main {
 
 <div id="start">
     <div class="start-card panel">
-        <h1 class="logo-title start-logo">Fingaz</h1>
+        <h1 class="logo-title start-logo">Fingaz!</h1>
         <p class="start-sub">A hand-to-hand duel for two thumbs</p>
         <div class="start-modes" id="start-modes"></div>
     </div>
@@ -1204,6 +1212,32 @@ const ICONS = {
         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3.4 9.2h3.6L11.8 5v14L7 14.8H3.4z" fill="currentColor"/>
         <path d="M15.6 9.6l5.2 5.2M20.8 9.6l-5.2 5.2"/></svg>`,
+
+    /* one rival: a face with the duelist's slanted eyes */
+    rivalFace: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 4.6 9.2 C 4.6 5, 7.9 2.6, 12 2.6 C 16.1 2.6, 19.4 5, 19.4 9.2
+                 L 19.4 12.8 C 19.4 17.6, 16.1 21.4, 12 21.4
+                 C 7.9 21.4, 4.6 17.6, 4.6 12.8 Z"/>
+        <path d="M 7.8 10 L 10.6 11.4"/><path d="M 16.2 10 L 13.4 11.4"/>
+        <path d="M 9.4 16.4 q 2.6 1.7 5.2 0"/></svg>`,
+
+    /* hot-seat: one phone going back and forth */
+    phoneSwap: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="8.6" y="2.6" width="6.8" height="18.8" rx="2.2"/>
+        <path d="M 10.8 5.4 h 2.4"/>
+        <path d="M 4.6 15.8 V 7.6"/><path d="M 2.5 10 L 4.6 7.2 L 6.7 10"/>
+        <path d="M 19.4 8.2 V 16.4"/><path d="M 21.5 14 L 19.4 16.8 L 17.3 14"/></svg>`,
+
+    /* the run, and what it pays out */
+    trophy: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 6.8 3.2 H 17.2 V 9 A 5.2 5.2 0 0 1 6.8 9 Z"/>
+        <path d="M 6.8 5 H 4.2 A 3 3 0 0 0 7.2 8.8"/>
+        <path d="M 17.2 5 H 19.8 A 3 3 0 0 1 16.8 8.8"/>
+        <path d="M 12 14.2 V 17.4"/>
+        <path d="M 8.4 21.2 H 15.6 L 14.6 17.4 H 9.4 Z"/></svg>`,
 
     book: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -2928,10 +2962,10 @@ function showStatsTab(name) {
     });
 }
 
-function openStats() {
+function openStats(tab = 'record') {
     playSound('tap');
     document.getElementById('stats').hidden = false;
-    showStatsTab('record');
+    showStatsTab(tab);
     renderStats();
 }
 function closeStats() { playSound('tap'); document.getElementById('stats').hidden = true; }
@@ -3414,7 +3448,15 @@ function openSheet(title, body, actions, icon = 'spark', isPortrait = false, ori
     actions.forEach(a => {
         const btn = document.createElement('button');
         btn.className = 'btn' + (a.ghost ? ' wide' : ' btn-gold');
-        btn.textContent = a.label;
+        if (a.icon && ICONS[a.icon]) {
+            const ic = document.createElement('span');
+            ic.className = 'act-ic';
+            ic.innerHTML = ICONS[a.icon];
+            btn.appendChild(ic);
+        }
+        const text = document.createElement('span');
+        text.textContent = a.label;
+        btn.appendChild(text);
         btn.onclick = a.action;
         wrap.appendChild(btn);
     });
@@ -3477,9 +3519,10 @@ function applyMode(mode) {
 
 /* switching modes throws away the current match, so ask first */
 const MODE_PITCH = {
-    ai:      { label: 'VS CPU',      line: `one rival, your pick.` },
-    pvp:     { label: '2 player',    line: 'pass one phone between you, decks facing each other.' },
-    tourney: { label: 'Tourney',     line: `all ${TOURNEY_ORDER.length} rivals back to back for the trophy \u2014 lose once and the run is over.` }
+    ai:      { label: 'VS CPU',   icon: 'rivalFace', line: `one rival, your pick.` },
+    pvp:     { label: '2 player', icon: 'phoneSwap', line: 'pass one phone between you, decks facing each other.' },
+    tourney: { label: 'Tourney',  icon: 'trophy',
+               line: `all ${TOURNEY_ORDER.length} rivals back to back for the trophy \u2014 lose once and the run is over.` }
 };
 
 document.getElementById('mode-btn').addEventListener('click', () => {
@@ -3491,7 +3534,7 @@ document.getElementById('mode-btn').addEventListener('click', () => {
         others.map(m => `${MODE_PITCH[m].label} \u2014 ${MODE_PITCH[m].line}`).join('\n') +
         '\n\nEither one ends the current match and resets the score.',
         [
-            ...others.map(m => ({ label: MODE_PITCH[m].label, action: () => applyMode(m) })),
+            ...others.map(m => ({ label: MODE_PITCH[m].label, icon: MODE_PITCH[m].icon, action: () => applyMode(m) })),
             { label: 'Keep playing', ghost: true, action: closeSheet }
         ],
         'target'
@@ -3526,7 +3569,11 @@ function tryStartMusic() {
 }
 MUSIC_GESTURES.forEach(ev => addEventListener(ev, tryStartMusic, { passive: true }));
 
-document.getElementById('score-btn').addEventListener('click', openStats);
+document.getElementById('score-btn').addEventListener('click', () => openStats());
+
+/* the face you are playing is the most obvious place to ask for a different
+   one, so it opens the card on the rival tab */
+document.getElementById('p2-avatar').addEventListener('click', () => openStats('setup'));
 
 function startMode(mode) {
     playSound('select');
@@ -3537,7 +3584,7 @@ function startMode(mode) {
 document.getElementById('start-modes').innerHTML = Object.entries(MODE_PITCH).map(([k, m]) =>
     `<button class="btn ${k === 'tourney' ? 'btn-gold' : k === 'pvp' ? 'btn-p2' : 'btn-p1'}"
              onclick="startMode('${k}')">
-        <span class="t">${m.label}</span><span class="d">${m.line}</span>
+        <span class="t">${ICONS[m.icon]}${m.label}</span><span class="d">${m.line}</span>
      </button>`).join('');
 
 loadSaved();
