@@ -213,10 +213,18 @@ body.pvp .hs-slot {
     min-width: 0;
 }
 body.pvp .hs-slot > * { transform: rotate(-90deg); flex: none; white-space: nowrap; }
+/* the far control turns the other way, so the pair mirrors across the board */
+body.pvp #hs-right > * { transform: rotate(90deg); }
 body.pvp .header-actions { width: auto; }
 body.pvp #mode-btn { font-size: 10.5px; padding: 7px 9px; }
 body.pvp .scoreline { font-size: 17px; padding: 3px 8px; }
-body.pvp .bubble-wrap { align-items: center; gap: 8px; min-height: 88px; }
+body.pvp .bubble-wrap {
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 88px;
+}
+body.pvp .bubble { max-width: calc(100% - 128px); }
 body.pvp main { padding: 10px 12px 14px; }
 .hs-slot { display: none; }
 
