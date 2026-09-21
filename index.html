@@ -190,6 +190,51 @@ header {
 .scoreline .s2 { color: var(--p2); }
 .scoreline .dash { color: var(--panel-fg-dim); font-size: 11px; }
 
+/* Hot-seat: the two players sit at opposite ends of the phone, so a bar across
+   the top is upside down and out of reach for one of them. In 2-player mode it
+   becomes a rail down the left edge, which reads the same from either end. */
+body.pvp { flex-direction: row; }
+body.pvp header {
+    flex: none;
+    align-self: flex-start;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    gap: 14px;
+    width: 56px;
+    height: 100svh;
+    padding: 12px 6px;
+    border-bottom: 0;
+    border-right: 3px solid var(--panel-line);
+}
+body.pvp .logo-title {
+    writing-mode: vertical-rl;
+    font-size: 23px;
+    letter-spacing: .04em;
+}
+/* controls ride the middle of the rail — the nearest thing to arm's reach for
+   both players */
+body.pvp .header-actions {
+    width: auto;
+    flex-direction: column;
+    gap: 9px;
+    margin: auto 0;
+}
+/* the tally stacks the way the board does: the far player's score on top */
+body.pvp .scoreline {
+    flex-direction: column-reverse;
+    gap: 1px;
+    padding: 7px 5px;
+    line-height: 1;
+}
+body.pvp .scoreline .dash { font-size: 9px; }
+body.pvp #mode-btn {
+    writing-mode: vertical-rl;
+    padding: 11px 8px;
+    letter-spacing: .06em;
+}
+body.pvp main { padding: 10px 8px 12px; }
+
 /* ============================================================
    FIELD
    ============================================================ */
@@ -1817,6 +1862,19 @@ const MOODS = {
         lead: { 0: 69, 6: 72, 10: 76, 16: 74, 22: 72, 26: 69, 32: 76, 38: 79, 42: 76, 48: 74, 54: 71, 58: 74 },
         arp: .1, pad: .055, leadVol: .075, hats: true, kicks: [0, 8], bassEvery: 4
     },
+    /* one hand from the end — quicker, a semitone ostinato where the tune was,
+       and a bass that pulses instead of sitting. Same key as the battle bed so
+       it tightens rather than cuts. */
+    tense: {
+        bpm: 138,
+        prog: [{ bass: 45, notes: [57, 60, 64] },   // Am
+               { bass: 46, notes: [58, 62, 65] },   // Bb — the half step up bites
+               { bass: 45, notes: [57, 60, 64] },   // Am
+               { bass: 40, notes: [56, 59, 64] }],  // E
+        lead: { 0: 69, 10: 68, 16: 69, 26: 68, 32: 69, 42: 68, 48: 69, 56: 68 },
+        arp: .085, pad: .05, leadVol: .07, hats: true,
+        kicks: [0, 3, 8, 11], bassEvery: 2, bassDur: 1.6
+    },
     /* bright and triumphant */
     victory: {
         bpm: 128,
@@ -1893,7 +1951,7 @@ function musicStep(n, t) {
 
     if (M.kicks.includes(beat)) mKick(t);
     if (M.hats && beat % 2 === 0) mHat(t, beat % 8 === 0 ? .05 : .028);
-    if (beat % M.bassEvery === 0) mTone(t, NOTE(ch.bass), stepDur() * 5, 'triangle', .34, 420);
+    if (beat % M.bassEvery === 0) mTone(t, NOTE(ch.bass), stepDur() * (M.bassDur || 5), 'triangle', .34, 420);
     if (M.hats && beat === 10) mTone(t, NOTE(ch.bass + 12), .2, 'triangle', .18, 500);
 
     if (M.arp) mTone(t, NOTE(ch.notes[ARP[beat]] + 12), stepDur() * 1.2, 'triangle', M.arp, 3200);
@@ -1935,6 +1993,16 @@ function setMood(name) {
     musicMood = name;
     stepIndex = 0;
     if (audioCtx && musicTimer) nextStepTime = audioCtx.currentTime + .05;
+}
+
+/* The bed tracks how close the match is: once either player is down to their
+   last hand it switches to the tense mood, and back if a Half revives one. */
+function refreshMood() {
+    if (musicMood === 'victory' || musicMood === 'defeat') return;
+    const alive = p => (p.left > 0 ? 1 : 0) + (p.right > 0 ? 1 : 0);
+    const mine = alive(gameState.p1), theirs = alive(gameState.p2);
+    if (!mine || !theirs) return;               // match is over — win/lose music has it
+    setMood(mine === 1 || theirs === 1 ? 'tense' : 'battle');
 }
 
 function stopMusic() {
@@ -2085,6 +2153,8 @@ function updateUI() {
 
     document.getElementById('score-p1').textContent = gameState.scores.p1;
     document.getElementById('score-p2').textContent = gameState.scores.p2;
+
+    refreshMood();
 }
 
 function canHalfSplit(player) {
@@ -2868,6 +2938,7 @@ function applyMode(mode) {
     document.getElementById('p2-deck-avatar').innerHTML = renderPortrait('player2');
     document.getElementById('p2-deck').hidden = !pvp;
     document.getElementById('p2-nameplate').hidden = pvp;
+    document.body.classList.toggle('pvp', pvp);
     resetGame();
 }
 
