@@ -561,6 +561,20 @@ main {
    SPEECH BUBBLE BANNER
    ============================================================ */
 .bubble-wrap { position: relative; display: flex; justify-content: center; padding: 4px 0 10px; }
+/* the threshold only moves in a long game, so it is only shown in one */
+.sudden-chip {
+    position: absolute; left: 50%; top: calc(100% - 4px);
+    transform: translateX(-50%);
+    padding: 3px 9px;
+    font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+    border: 2.5px solid var(--ink); border-radius: 9px;
+    background: var(--danger); color: #fff;
+    box-shadow: 3px 3px 0 var(--ink);
+    white-space: nowrap;
+    animation: suddenIn .3s cubic-bezier(.2,1.6,.4,1) both;
+}
+.sudden-chip[hidden] { display: none; }
+@keyframes suddenIn { 0% { opacity: 0; transform: translateX(-50%) scale(.6); } 100% { opacity: 1; } }
 
 /* The rival's line lands centre-field where you are already looking, holds for
    a beat, then flies up to the nameplate and rests there as their status. */
@@ -866,6 +880,8 @@ body.pvp .toss-roll:active:not(:disabled) { transform: translate(6px, 6px); }
     text-transform: uppercase; letter-spacing: .02em;
     padding: 9px 6px;
 }
+.stats-tab { gap: 7px; }
+.stats-tab .icon { width: 16px; height: 16px; }
 .stats-tab.on { background: var(--gold); }
 .stats-pane[hidden] { display: none; }
 .stats-tally {
@@ -913,13 +929,15 @@ body.pvp .toss-roll:active:not(:disabled) { transform: translate(6px, 6px); }
     border: 2px solid var(--ink); border-radius: 9px; overflow: hidden; }
 .diff-row .btn .face { position: relative; }
 .diff-row .btn .face svg { width: 100%; height: 100%; display: block; }
+/* sits inside the portrait's corner rather than hanging off it */
 .beaten-tick {
-    position: absolute; right: -4px; bottom: -4px;
-    width: 15px; height: 15px; border-radius: 50%;
+    position: absolute; right: -3px; bottom: -3px;
+    width: 16px; height: 16px; border-radius: 50%;
     border: 2px solid var(--ink); background: var(--mint);
-    color: var(--ink); font-size: 8px; font-weight: 900;
-    display: grid; place-items: center; line-height: 1;
+    color: var(--ink);
+    display: grid; place-items: center;
 }
+.beaten-tick svg { width: 10px; height: 10px; display: block; }
 .diff-row .btn.on { background: var(--gold); }
 /* not yet earned: the face is there, in shadow, so you can see who is coming */
 .diff-row .btn.locked { opacity: 1; }
@@ -1161,6 +1179,7 @@ body.pvp .toss-roll:active:not(:disabled) { transform: translate(6px, 6px); }
             <span class="rs-text" id="rs-text"></span>
         </div>
         <div class="bubble" id="bubble">Pick one of your hands, then tap a rival hand to strike!</div>
+        <div class="sudden-chip" id="sudden-chip" hidden></div>
         <div class="hs-slot" id="hs-right"></div>
     </div>
 
@@ -1274,8 +1293,12 @@ body.pvp .toss-roll:active:not(:disabled) { transform: translate(6px, 6px); }
 <div id="stats" hidden>
     <div class="stats-card">
         <div class="stats-tabs" role="tablist">
-            <button class="btn stats-tab on" id="tab-record" role="tab" onclick="showStatsTab('record')">Record</button>
-            <button class="btn stats-tab" id="tab-setup" role="tab" onclick="showStatsTab('setup')">Rivals</button>
+            <button class="btn stats-tab on" id="tab-record" role="tab" onclick="showStatsTab('record')">
+                <span data-icon="record"></span>Record
+            </button>
+            <button class="btn stats-tab" id="tab-setup" role="tab" onclick="showStatsTab('setup')">
+                <span data-icon="rivalFace"></span>Rivals
+            </button>
         </div>
         <div class="stats-pane" id="pane-record">
             <div class="stats-tally" id="stats-tally"></div>
@@ -1380,6 +1403,12 @@ const ICONS = {
         <path d="M 17.2 5 H 19.8 A 3 3 0 0 1 16.8 8.8"/>
         <path d="M 12 14.2 V 17.4"/>
         <path d="M 8.4 21.2 H 15.6 L 14.6 17.4 H 9.4 Z"/></svg>`,
+
+    /* the record: a tally sheet */
+    record: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4.5" y="2.8" width="15" height="18.4" rx="2.6"/>
+        <path d="M 8.4 8 h 7.2"/><path d="M 8.4 12 h 7.2"/><path d="M 8.4 16 h 4"/></svg>`,
 
     book: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -2535,7 +2564,7 @@ function playSound(name) {
    ============================================================ */
 /* Bumped with every release, alongside CACHE in sw.js — the two are meant to
    read the same, so the card tells you which build actually reached you. */
-const APP_VERSION = 'v13';
+const APP_VERSION = 'v14';
 
 const MUSIC_VOL = 0.115;
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
@@ -2810,6 +2839,7 @@ let gameState = {
     selectedHand: null,
     activeSpecial: null,
     locked: false,
+    turns: 0,
     rivalLine: null,
     scores: { p1: 0, p2: 0 },
     p1: { left: 1, right: 1, abilities: { subtraction: true, team: true } },
@@ -2879,7 +2909,7 @@ function updateUI() {
         const live = gameState[w][side] > 0;
         if (!power || w !== defender || !live) { el.hidden = true; return; }
         const total = gameState[w][side] + power;
-        const ko = total >= 5;
+        const ko = total >= koAt();
         el.textContent = ko ? `${total} · OUT!` : `→ ${total}`;
         el.className = 'preview' + (ko ? ' ko' : '') + (flipPreview ? ' flip' : '');
         el.hidden = false;
@@ -2937,6 +2967,10 @@ function updateUI() {
         document.documentElement.style.setProperty('--foe-soft', FOE_SOFT[foeArt] || 'var(--p2-soft)');
     }
     document.getElementById('p2-name').textContent = p2Label();
+
+    const chip = document.getElementById('sudden-chip');
+    chip.hidden = koAt() >= 5;
+    chip.textContent = `Sudden death \u00b7 breaks at ${koAt()}`;
 
     document.getElementById('score-p1').textContent = gameState.scores.p1;
     document.getElementById('score-p2').textContent = gameState.scores.p2;
@@ -3024,7 +3058,7 @@ function executeAttack(attackerSide, defenderSide) {
         const total = before + power;
         let next;
 
-        if (total >= 5) {
+        if (total >= koAt()) {
             next = 0;
             rivalSays(att === 'p2' ? 'ko' : 'hurt');
             playSound('ko');
@@ -3057,7 +3091,7 @@ function executeTeamAttack(att, defenderSide) {
     const def = other(att);
     const power = gameState[att].left + gameState[att].right;
     const total = gameState[def][defenderSide] + power;
-    const next = total >= 5 ? 0 : total;
+    const next = total >= koAt() ? 0 : total;
 
     playSound(next === 0 ? 'ko' : 'blast');
     haptic(70);
@@ -3465,25 +3499,25 @@ const pace = ms => Math.round(ms * (SPEEDS[speed] || SPEEDS.steady).k);
                  hunt:   and of the safest, the one setting up the most kills */
 const RIVALS = {
     easy:      { name: 'Momo',     title: 'the Apprentice', art: 'momo',   level: 'Easy', theme: 'playful',
-                 ai: { finish: .35, half: .5,  trim: .2,  trimBest: false, trimWipes: false, pick: 'random' } },
+                 ai: { team: 0.2, finish: .35, half: .5,  trim: .2,  trimBest: false, trimWipes: false, pick: 'random' } },
     scrappy:   { name: 'Taiga',    title: 'the Upstart',    art: 'taiga',  level: 'Scrappy', theme: 'playful',
-                 ai: { finish: .7,  half: .75, trim: .3,  trimBest: false, trimWipes: true,  pick: 'kill' } },
+                 ai: { team: 0.4, finish: .7,  half: .75, trim: .3,  trimBest: false, trimWipes: true,  pick: 'kill' } },
     keen:      { name: 'Hana',     title: 'the Understudy', art: 'hana',   level: 'Keen', theme: 'battle',
-                 ai: { finish: .85, half: .9,  trim: .35, trimBest: true,  trimWipes: true,  pick: 'kill' } },
+                 ai: { team: 0.5, finish: .85, half: .9,  trim: .35, trimBest: true,  trimWipes: true,  pick: 'kill' } },
     normal:    { name: 'Kurogane', title: 'the Duelist',    art: 'rival',  level: 'Normal', theme: 'battle',
-                 ai: { finish: 1,   half: 1,   trim: .45, trimBest: true,  trimWipes: true,  pick: 'kill' } },
+                 ai: { team: 0.6, guard: true, finish: 1,   half: 1,   trim: .45, trimBest: true,  trimWipes: true,  pick: 'kill' } },
     stubborn:  { name: 'Tetsu',    title: 'the Wall',       art: 'tetsu',  level: 'Stubborn', theme: 'heavy',
-                 ai: { finish: 1,   half: 1,   trim: .05, trimBest: true,  trimWipes: true,  pick: 'safe' } },
+                 ai: { team: 0.5, guard: true, finish: 1,   half: 1,   trim: .05, trimBest: true,  trimWipes: true,  pick: 'safe' } },
     cunning:   { name: 'Rin',      title: 'the Trickster',  art: 'rin',    level: 'Cunning', theme: 'heavy',
-                 ai: { finish: 1,   half: 1,   trim: .7,  trimBest: true,  trimWipes: true,  pick: 'safe' } },
+                 ai: { team: 0.7, guard: true, finish: 1,   half: 1,   trim: .7,  trimBest: true,  trimWipes: true,  pick: 'safe' } },
     reckless:  { name: 'Hebi',     title: 'the Serpent',    art: 'hebi',   level: 'Reckless', theme: 'dark',
-                 ai: { finish: 1,   half: .6,  trim: .5,  trimBest: true,  trimWipes: true,  pick: 'greedy' } },
+                 ai: { team: 0.85, guard: true, finish: 1,   half: .6,  trim: .5,  trimBest: true,  trimWipes: true,  pick: 'greedy' } },
     hard:      { name: 'Yurei',    title: 'the Phantom',    art: 'yurei',  level: 'Hard', theme: 'dark',
-                 ai: { finish: 1,   half: 1,   trim: .25, trimBest: true,  trimWipes: true,  pick: 'safe' } },
+                 ai: { team: 0.7, guard: true, finish: 1,   half: 1,   trim: .25, trimBest: true,  trimWipes: true,  pick: 'safe' } },
     ruthless:  { name: 'Kage',     title: 'the Sniper',     art: 'kage',   level: 'Ruthless', theme: 'boss',
-                 ai: { finish: 1,   half: 1,   trim: .3,  trimBest: true,  trimWipes: true,  pick: 'sniper' } },
+                 ai: { team: 0.8, guard: true, finish: 1,   half: 1,   trim: .3,  trimBest: true,  trimWipes: true,  pick: 'sniper' } },
     brutal:    { name: 'Oni',      title: 'the Warlord',    art: 'oni',    level: 'Brutal', theme: 'boss',
-                 ai: { finish: 1,   half: 1,   trim: .35, trimBest: true,  trimWipes: true,  pick: 'hunt' } },
+                 ai: { team: 0.85, guard: true, finish: 1,   half: 1,   trim: .35, trimBest: true,  trimWipes: true,  pick: 'hunt' } },
 
     /* The last two are not next on the ladder — they are earned by doing
        something. They stay out of a tourney draw until they are yours. */
@@ -3491,7 +3525,7 @@ const RIVALS = {
                  bonus: true, req: 'Win 2 tourneys',
                  need: () => trophies >= 2,
                  progress: () => `${Math.min(trophies, 2)}/2 tourneys`,
-                 ai: { finish: 1,   half: 1,   trim: .6,  trimBest: true,  trimWipes: true,  pick: 'hunt' } },
+                 ai: { team: 0.9, guard: true, finish: 1,   half: 1,   trim: .6,  trimBest: true,  trimWipes: true,  pick: 'hunt' } },
     legend:    { name: 'George',   title: 'the Undefeated', art: 'george', level: 'Legend', theme: 'final',
                  bonus: true, req: 'Beat every other rival',
                  others: () => ROSTER.filter(k => k !== 'legend'),
@@ -3500,7 +3534,7 @@ const RIVALS = {
                      const o = RIVALS.legend.others();
                      return `${o.filter(k => beaten.includes(k)).length}/${o.length} beaten`;
                  },
-                 ai: { finish: 1,   half: 1,   trim: .5,  trimBest: true,  trimWipes: true,  pick: 'perfect' } }
+                 ai: { team: 0.9, guard: true, finish: 1,   half: 1,   trim: .5,  trimBest: true,  trimWipes: true,  pick: 'perfect' } }
 };
 const rival = () => RIVALS[difficulty] || RIVALS.normal;
 
@@ -3677,7 +3711,10 @@ function rivalGridHTML(pick, markCurrent = true) {
         }
         const on = markCurrent && k === difficulty ? ' on' : '';
         // a tick on the ones you have beaten, so "who is left" is a look
-        const done = beaten.includes(k) ? '<span class="beaten-tick">\u2714</span>' : '';
+        const done = beaten.includes(k) ? `<span class="beaten-tick">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="4.5"
+                 stroke-linecap="round" stroke-linejoin="round"><path d="M 5 13 L 10 18 L 19 7"/></svg>
+        </span>` : '';
         return `<button class="btn${on}"${tourney ? ' disabled' : ''} onclick="${pick}('${k}')">
                     <span class="face">${renderPortrait(r.art)}${done}</span>${r.name}<span class="sub">${r.level}</span>
                 </button>`;
@@ -3982,15 +4019,60 @@ function tourneyLost() {
 /* ============================================================
    TURNS + CPU
    ============================================================ */
+/* Sudden death. With the opening drawn rather than won, two careful players
+   can keep the board going round in circles; this closes it. Hands break at
+   five as always, then at four, then at three, so a stalemate tightens into a
+   finish instead of lasting forever. */
+const SUDDEN = [{ at: 20, ko: 4 }, { at: 28, ko: 3 }];
+const koAt = () => (SUDDEN.slice().reverse().find(s => gameState.turns >= s.at) || { ko: 5 }).ko;
+
 function switchTurn() {
     gameState.selectedHand = null;
     gameState.activeSpecial = null;
     gameState.turn = other(gameState.turn);
+    gameState.turns++;
+    const step = SUDDEN.find(s => s.at === gameState.turns);
+    if (step) {
+        playSound('charge');
+        haptic(90);
+        flashSpeedlines();
+        say(`SUDDEN DEATH \u2014 hands now break at ${step.ko}!`, true);
+        setMood('tense');
+    }
     updateUI();
     if (gameState.mode === 'ai' && gameState.turn === 'p2') setTimeout(cpuTurn, pace(950));
 }
 
 /* every legal attack, with what it achieves and what it exposes */
+/* A player takes at most one hand a turn, so they finish exactly when their
+   rival is down to a single hand and something in their kit can break it —
+   a hit, a Minus big enough, or a Team attack. The danger count only saw
+   plain hits, which is how Team-then-Minus won nearly every time: Team leaves
+   the rival on one hand, and Minus always takes a hand that small. */
+function canFinishNow(att, def) {
+    const live = ['left', 'right'].filter(s => def[s] > 0);
+    if (live.length !== 1) return false;
+    const h = def[live[0]];
+    const hands = ['left', 'right'].map(s => att[s]).filter(v => v > 0);
+    if (hands.some(v => v + h >= koAt())) return true;
+    if (att.abilities.subtraction && hands.some(v => v >= h)) return true;
+    if (att.abilities.team && att.left > 0 && att.right > 0
+        && att.left + att.right + h >= koAt()) return true;
+    return false;
+}
+
+/* back onto two hands: Half where the count is even, a shift where it is not */
+function cpuRevive() {
+    const p = gameState.p2;
+    const gone = p.left === 0 ? 'left' : (p.right === 0 ? 'right' : null);
+    if (!gone) return null;
+    const total = p[gone === 'left' ? 'right' : 'left'];
+    if (total < 2) return null;
+    if (total % 2 === 0) return () => triggerHalfSplit();
+    const half = Math.floor(total / 2);
+    return () => applySplit(half, total - half);
+}
+
 function cpuMoves() {
     const p2 = gameState.p2, p1 = gameState.p1;
     const mine = ['left', 'right'].filter(s => p2[s] > 0);
@@ -3998,25 +4080,27 @@ function cpuMoves() {
     const out = [];
     for (const a of mine) for (const d of yours) {
         const total = p2[a] + p1[d];
-        const kills = total >= 5;
+        const kills = total >= koAt();
         const after = { left: p1.left, right: p1.right };
         after[d] = kills ? 0 : total;
         let threats = 0;
         ['left', 'right'].forEach(pa => {
             if (after[pa] > 0) ['left', 'right'].forEach(pd => {
-                if (p2[pd] > 0 && after[pa] + p2[pd] >= 5) threats++;
+                if (p2[pd] > 0 && after[pa] + p2[pd] >= koAt()) threats++;
             });
         });
         // and what it sets up: its own knockouts on the board it leaves behind
         let pressure = 0;
         ['left', 'right'].forEach(pa => {
             if (p2[pa] > 0) ['left', 'right'].forEach(pd => {
-                if (after[pd] > 0 && p2[pa] + after[pd] >= 5) pressure++;
+                if (after[pd] > 0 && p2[pa] + after[pd] >= koAt()) pressure++;
             });
         });
         // what the move costs you: a whole hand, or the fingers it puts on one
         const harm = kills ? 100 + p1[d] : p2[a];
-        out.push({ a, d, kills, wins: kills && yours.length === 1, threats, pressure, harm });
+        // does this hand the player the finish? their specials count too
+        const fatal = canFinishNow({ ...after, abilities: p1.abilities }, p2);
+        out.push({ a, d, kills, wins: kills && yours.length === 1, threats, pressure, harm, fatal });
     }
     return out;
 }
@@ -4035,6 +4119,25 @@ function cpuTurn() {
     const winning = moves.find(m => m.wins);
     if (winning && Math.random() < A.finish) return go(winning);
 
+    /* Team was written for the player and never reached from here, so the
+       rival never used the one move that takes a hand two hands cannot. It
+       spends it to finish, or on a knockout no single hand could manage. */
+    if (p2.abilities.team && p2.left > 0 && p2.right > 0) {
+        const sum = p2.left + p2.right;
+        const breaks = yours.filter(s => sum + p1[s] >= koAt());
+        const alone = s => ['left', 'right'].some(a => p2[a] > 0 && p2[a] + p1[s] >= koAt());
+        const finishes = breaks.length && yours.length === 1;
+        const worth = breaks.find(s => !alone(s));
+        if (finishes && Math.random() < A.finish) return executeTeamAttack('p2', breaks[0]);
+        if (worth && Math.random() < A.team) return executeTeamAttack('p2', worth);
+    }
+
+    // already down to one breakable hand: get off it before anything else
+    if (A.guard && canFinishNow(p1, p2)) {
+        const revive = cpuRevive();
+        if (revive) return revive();
+    }
+
     if (canHalfSplit('p2') && Math.random() < A.half) return triggerHalfSplit();
 
     if (p2.abilities.subtraction && yours.length) {
@@ -4042,16 +4145,19 @@ function cpuTurn() {
         if (t && ((A.trimWipes && t.wipes) || Math.random() < A.trim)) return cpuTrim(t.side, t.amount);
     }
 
-    if (A.pick === 'random') return go(rand(moves));
+    // never hand over the finish if there is any other attack going
+    const open = (A.guard && moves.some(m => !m.fatal)) ? moves.filter(m => !m.fatal) : moves;
 
-    const kills = moves.filter(m => m.kills);
-    const pool = kills.length ? kills : moves;
+    if (A.pick === 'random') return go(rand(open));
+
+    const kills = open.filter(m => m.kills);
+    const pool = kills.length ? kills : open;
     if (A.pick === 'kill') return go(rand(pool));
 
     // takes the biggest bite going and never mind what it leaves open
     if (A.pick === 'greedy') {
-        const worst = Math.max(...moves.map(m => m.harm));
-        return go(rand(moves.filter(m => m.harm === worst)));
+        const worst = Math.max(...open.map(m => m.harm));
+        return go(rand(open.filter(m => m.harm === worst)));
     }
 
     const safest = Math.min(...pool.map(m => m.threats));
@@ -4070,9 +4176,10 @@ function cpuTurn() {
     // will accept a little exposure for a much better next turn
     if (A.pick === 'perfect') {
         const score = m => (m.wins ? 1000 : 0) + (m.kills ? 120 : 0)
-                         + m.pressure * 14 - m.threats * 16 + m.harm * .5;
-        const best = Math.max(...moves.map(score));
-        return go(rand(moves.filter(m => score(m) === best)));
+                         + m.pressure * 14 - m.threats * 16 + m.harm * .5
+                         - (m.fatal ? 400 : 0);
+        const best = Math.max(...open.map(score));
+        return go(rand(open.filter(m => score(m) === best)));
     }
 
     const most = Math.max(...safe.map(m => m.pressure));
@@ -4304,6 +4411,7 @@ function resetGame() {
     gameState.selectedHand = null;
     gameState.activeSpecial = null;
     gameState.locked = false;
+    gameState.turns = 0;
     gameState.rivalLine = null;
     gameState.p1 = { left: 1, right: 1, abilities: { subtraction: true, team: true } };
     gameState.p2 = { left: 1, right: 1, abilities: { subtraction: true, team: true } };
@@ -4367,6 +4475,8 @@ function showRules() {
         <p><b>Goal:</b> knock out both of the rival's hands.</p>
         <p><b>Attack:</b> tap one of your hands, then a rival hand. Your fingers get added to theirs.</p>
         <p><b>5 or more:</b> that hand is knocked out for good.</p>
+        <p><b>Sudden death:</b> if nobody has finished it by turn 20, hands start
+           breaking at 4 \u2014 and at 3 from turn 28. Long games end.</p>
         <p><b>Shift:</b> slide fingers between your own hands instead of attacking.</p>
         <p><b>Half:</b> with one hand out and an even number on the other, split it in half to bring the dead hand back.</p>
         <p><b>Minus:</b> once per game, snip a rival hand down by as many fingers as you are holding on one of your own hands.</p>
