@@ -284,6 +284,23 @@ body.pvp main { padding: 10px 12px 14px; }
 .challenger-actions .btn { padding: 12px; font-size: 13px; }
 .challenger-actions .btn[hidden] { display: none; }
 
+#chooser {
+    position: fixed; inset: 0; z-index: 86;
+    display: flex; align-items: center; justify-content: center;
+    padding: 16px;
+    background-color: var(--page);
+    background-image: radial-gradient(var(--page-dot) 1.2px, transparent 1.2px);
+    background-size: 7px 7px;
+    overflow-y: auto;
+}
+#chooser[hidden] { display: none; }
+.chooser-card { width: 100%; max-width: 340px; padding: 18px; }
+.chooser-card h3 {
+    margin: 0 0 12px; font-family: var(--font-display); font-size: 26px; font-weight: 400;
+    text-transform: uppercase; letter-spacing: .02em; text-align: center; color: var(--panel-fg);
+}
+.chooser-back { width: 100%; padding: 11px; font-size: 13px; }
+
 /* nothing starts until a mode is picked — the game opens on the choice rather
    than dropping you into a rival you did not ask for */
 #start {
@@ -760,8 +777,16 @@ main {
     filter: drop-shadow(5px 5px 0 var(--ink));
     transition: transform .25s ease, filter .25s ease;
 }
-/* nothing rolled yet — step back and let the button lead */
-.die-art.waiting { filter: none; transform: scale(.82); }
+/* nothing rolled yet: the face of whoever is about to roll, stepped back a
+   little so the button still leads */
+.die-face {
+    width: 100%; height: 100%;
+    border: 4px solid var(--ink); border-radius: 21px;
+    overflow: hidden; background: var(--panel);
+    transform: scale(.86);
+    box-shadow: 5px 5px 0 var(--ink);
+}
+.die-face svg { width: 100%; height: 100%; display: block; }
 @keyframes tumble {
     0%   { transform: rotate(0) translateY(0); }
     25%  { transform: rotate(-17deg) translateY(-18px); }
@@ -849,6 +874,11 @@ main {
 .stats-tally .v { display: block; line-height: 1.35; padding: 2px 4px 0; font-size: 32px; letter-spacing: .02em; }
 .stats-tally .p1 { color: var(--p1); }
 .stats-tally .p2 { color: var(--p2); }
+.stats-version {
+    margin: 0 0 10px;
+    font-size: 9.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+    text-align: center; color: var(--panel-fg-dim); opacity: .6;
+}
 .stats-played {
     margin: -8px 0 12px;
     font-size: 10.5px; font-weight: 700; letter-spacing: .04em;
@@ -1180,6 +1210,14 @@ main {
     </div>
 </div>
 
+<div id="chooser" hidden>
+    <div class="chooser-card panel">
+        <h3>Choose your rival</h3>
+        <div class="diff-row" id="chooser-row"></div>
+        <button class="btn wide chooser-back" onclick="backToModes()">Back</button>
+    </div>
+</div>
+
 <div id="start">
     <div class="start-card panel">
         <h1 class="logo-title start-logo">Fingaz!</h1>
@@ -1231,6 +1269,7 @@ main {
             <div class="stats-trophies" id="stats-trophies" hidden></div>
             <div class="stats-head">Recent games</div>
             <div class="stats-list" id="stats-list"></div>
+            <div class="stats-version" id="stats-version"></div>
             <div class="stats-extra" id="stats-extra">
                 <button class="btn btn-sm" id="stats-help"><span data-icon="book"></span> How to play</button>
                 <button class="btn btn-sm" id="stats-sound">
@@ -2480,6 +2519,10 @@ function playSound(name) {
    MUSIC — a looping shonen-ish bed, mixed well under the effects
    and ducked whenever something loud lands.
    ============================================================ */
+/* Bumped with every release, alongside CACHE in sw.js — the two are meant to
+   read the same, so the card tells you which build actually reached you. */
+const APP_VERSION = 'v11';
+
 const MUSIC_VOL = 0.115;
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
 
@@ -3077,7 +3120,7 @@ function pickTrimAmount(target, side) {
         const left = Math.max(0, cur - trim);
         buttons.push({
             label: `${mySide === 'left' ? 'Left' : 'Right'} hand (${trim}) · ` +
-                   (left <= 0 ? 'WIPE OUT' : `leaves ${left}`),
+                   (left <= 0 ? 'TRIM OUT' : `leaves ${left}`),
             action: () => {
                 gameState[target][side] = left;
                 gameState[me].abilities.subtraction = false;
@@ -3430,8 +3473,12 @@ const RIVALS = {
                  ai: { finish: 1,   half: 1,   trim: .6,  trimBest: true,  trimWipes: true,  pick: 'hunt' } },
     legend:    { name: 'George',   title: 'the Undefeated', art: 'george', level: 'Legend', theme: 'final',
                  bonus: true, req: 'Beat every other rival',
-                 need: () => LADDER.every(k => beaten.includes(k)),
-                 progress: () => `${LADDER.filter(k => beaten.includes(k)).length}/${LADDER.length} beaten`,
+                 others: () => ROSTER.filter(k => k !== 'legend'),
+                 need: () => RIVALS.legend.others().every(k => beaten.includes(k)),
+                 progress: () => {
+                     const o = RIVALS.legend.others();
+                     return `${o.filter(k => beaten.includes(k)).length}/${o.length} beaten`;
+                 },
                  ai: { finish: 1,   half: 1,   trim: .5,  trimBest: true,  trimWipes: true,  pick: 'perfect' } }
 };
 const rival = () => RIVALS[difficulty] || RIVALS.normal;
@@ -3503,9 +3550,23 @@ function unlock(key) {
 /* Beating a rival in an ordinary match opens the next one along. Beat one in a
    tourney — where the draw reaches past what you have earned — and you have
    earned that one instead. */
+/* Wins were not recorded by rival until the bonus pair needed them, so a save
+   from before that would look like it had beaten nobody. Two things can be
+   recovered: the wins still in the match history, and the fact that a rival is
+   unlocked at all — on the ladder that only happens by beating the one before. */
+function seedBeaten() {
+    const out = new Set();
+    history.forEach(h => { if (h.w === 'p1' && h.m !== 'pvp' && RIVALS[h.d]) out.add(h.d); });
+    const first = STARTING_ROSTER.length - 1;
+    const reached = Math.max(...unlocked.map(k => LADDER.indexOf(k)), first);
+    LADDER.slice(first, reached).forEach(k => out.add(k));
+    beaten = ROSTER.filter(k => out.has(k));
+}
+
 function unlockFromWin(key) {
     // the bonus pair are never "next along" — they have their own conditions
-    return tourney ? unlock(key) : unlock(LADDER[LADDER.indexOf(key) + 1]);
+    const at = LADDER.indexOf(key);
+    return tourney ? unlock(key) : (at < 0 ? null : unlock(LADDER[at + 1]));
 }
 
 /* checked after every win: the two earned rivals let themselves in */
@@ -3530,10 +3591,12 @@ function loadSaved() {
         if (SPEEDS[sp]) speed = sp;
         playMs = Math.max(0, parseInt(localStorage.getItem('fingaz-playms') || '0', 10) || 0);
         trophies = Math.max(0, parseInt(localStorage.getItem('fingaz-trophies') || '0', 10) || 0);
-        const bt = JSON.parse(localStorage.getItem('fingaz-beaten') || 'null');
-        if (Array.isArray(bt)) beaten = ROSTER.filter(k => bt.includes(k));
         const un = JSON.parse(localStorage.getItem('fingaz-unlocked') || 'null');
         if (Array.isArray(un)) unlocked = ROSTER.filter(k => un.includes(k) || STARTING_ROSTER.includes(k));
+        const bt = JSON.parse(localStorage.getItem('fingaz-beaten') || 'null');
+        // the unlocked list has to be in before this: it is half the evidence
+        if (Array.isArray(bt)) beaten = ROSTER.filter(k => bt.includes(k));
+        else seedBeaten();          // played before wins were recorded by rival
         if (!isUnlocked(difficulty)) difficulty = STARTING_ROSTER[STARTING_ROSTER.length - 1];
     } catch (e) { history = []; }
 }
@@ -3579,6 +3642,57 @@ function swapRival(d) {
     say(intro.says ? `\u201c${intro.text}\u201d` : intro.text);
 }
 
+/* The rival grid, shared by the record card and the chooser you get when a
+   VS CPU game starts. `pick` is the function a live row calls with its key. */
+function rivalGridHTML(pick, markCurrent = true) {
+    return Object.entries(RIVALS).map(([k, r]) => {
+        if (!isUnlocked(k)) {
+            const after = RIVALS[LADDER[LADDER.indexOf(k) - 1]];
+            const how = r.bonus ? r.progress() : `Beat ${after ? after.name : '\u2014'}`;
+            // the earned pair explain themselves on a tap; the ladder ones are plain
+            return `<button class="btn locked${r.bonus ? ' bonus' : ''}"${r.bonus ? ` onclick="explainBonus('${k}')"` : ' disabled'}>
+                        <span class="face">${renderPortrait(r.art)}</span>???<span class="sub">${how}</span>
+                    </button>`;
+        }
+        const on = markCurrent && k === difficulty ? ' on' : '';
+        return `<button class="btn${on}"${tourney ? ' disabled' : ''} onclick="${pick}('${k}')">
+                    <span class="face">${renderPortrait(r.art)}</span>${r.name}<span class="sub">${r.level}</span>
+                </button>`;
+    }).join('');
+}
+
+/* Starting a VS CPU game asks who you are fighting rather than reusing
+   whoever was last saved — and doubles as the place the ladder is shown off. */
+function openRivalChooser() {
+    document.getElementById('chooser-row').innerHTML = rivalGridHTML('chooseRival');
+    document.getElementById('chooser').hidden = false;
+}
+
+function chooseRival(key) {
+    playSound('select');
+    document.getElementById('chooser').hidden = true;
+    difficulty = key;
+    persist();
+    applyMode('ai');
+    const intro = introLine(key);
+    say(intro.says ? `\u201c${intro.text}\u201d` : intro.text);
+}
+
+/* what is left before one of the earned pair turns up */
+function explainBonus(key) {
+    const r = RIVALS[key];
+    playSound('tap');
+    let body = `${r.req}. You are at ${r.progress()}.`;
+    if (r.others) {
+        const left = r.others().filter(k => !beaten.includes(k)).map(k => RIVALS[k].name);
+        if (left.length) body += `\n\nStill to beat: ${left.join(', ')}.`;
+    } else if (trophies < 2) {
+        body += `\n\nA tourney is five rivals back to back \u2014 win two of those runs.`;
+    }
+    openSheet(`${r.name} is waiting`, body,
+        [{ label: 'Right then', action: closeSheet }], 'trophy');
+}
+
 function setDifficulty(d) {
     if (d === difficulty) return;
     playSound('select');
@@ -3619,24 +3733,14 @@ function renderStats() {
         <div class="col"><span class="who">played</span><span class="v" style="opacity:.35">${history.length}</span></div>
         <div class="col"><span class="who">Rival</span><span class="v p2">${losses}</span></div>`;
     document.getElementById('stats-played').textContent = `${playedLabel(playTotal())} played`;
+    document.getElementById('stats-version').textContent = `Fingaz ${APP_VERSION}`;
 
     const cup = document.getElementById('stats-trophies');
     cup.hidden = !cups;
     cup.innerHTML = cups
         ? `${trophyArt()}<span>${cups} tourney ${cups === 1 ? 'trophy' : 'trophies'}</span>` : '';
 
-    document.getElementById('diff-row').innerHTML = Object.entries(RIVALS).map(([k, r]) => {
-        if (!isUnlocked(k)) {
-            const after = RIVALS[LADDER[LADDER.indexOf(k) - 1]];
-            const how = r.bonus ? r.progress() : `Beat ${after ? after.name : '\u2014'}`;
-            return `<button class="btn locked${r.bonus ? ' bonus' : ''}" disabled title="${r.bonus ? r.req : how}">
-                        <span class="face">${renderPortrait(r.art)}</span>???<span class="sub">${how}</span>
-                    </button>`;
-        }
-        return `<button class="btn${k === difficulty ? ' on' : ''}"${tourney ? ' disabled' : ''} onclick="setDifficulty('${k}')">
-                    <span class="face">${renderPortrait(r.art)}</span>${r.name}<span class="sub">${r.level}</span>
-                </button>`;
-    }).join('');
+    document.getElementById('diff-row').innerHTML = rivalGridHTML('setDifficulty');
 
     document.getElementById('diff-head').textContent =
         tourney ? 'Rival \u2014 set by the tourney' : 'Choose your rival';
@@ -4000,18 +4104,20 @@ const PIPS = {
 };
 let toss = { active: false, rolling: false, p1: 0, p2: 0 };
 
+/* Before the roll there is nothing to show on a die, so it holds the face of
+   whoever is about to roll it instead of an empty box. */
+function tossFace(who) {
+    if (who === 'p1') return 'hero';
+    return gameState.mode === 'pvp' ? 'player2' : rival().art;
+}
+
 function renderDie(v, who) {
     const face = who === 'p1' ? 'var(--p1-soft)' : 'var(--p2-soft)';
-    const waiting = v === 0;
-    return `<svg viewBox="0 0 100 100" class="die-art${waiting ? ' waiting' : ''}">
+    if (v === 0) return `<div class="die-face">${renderPortrait(tossFace(who))}</div>`;
+    return `<svg viewBox="0 0 100 100" class="die-art">
         <rect x="6" y="6" width="88" height="88" rx="21"
-              fill="${waiting ? 'transparent' : face}"
-              stroke="var(--ink)" stroke-width="${waiting ? 3.5 : 5}"
-              ${waiting ? 'stroke-dasharray="11 8" opacity=".4"' : ''}/>
-        ${v === 0
-            ? `<text x="50" y="54" text-anchor="middle" dominant-baseline="middle"
-                     font-family="var(--font-display)" font-size="44" fill="var(--ink)" opacity=".3">?</text>`
-            : PIPS[v].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="8.5" fill="var(--ink)"/>`).join('')}
+              fill="${face}" stroke="var(--ink)" stroke-width="5"/>
+        ${PIPS[v].map(([x, y]) => `<circle cx="${x}" cy="${y}" r="8.5" fill="var(--ink)"/>`).join('')}
     </svg>`;
 }
 
@@ -4302,7 +4408,8 @@ document.getElementById('mode-btn').addEventListener('click', () => {
         others.map(m => `${MODE_PITCH[m].label} \u2014 ${MODE_PITCH[m].line}`).join('\n') +
         '\n\nEither one ends the current match and resets the score.',
         [
-            ...others.map(m => ({ label: MODE_PITCH[m].label, icon: MODE_PITCH[m].icon, action: () => applyMode(m) })),
+            ...others.map(m => ({ label: MODE_PITCH[m].label, icon: MODE_PITCH[m].icon,
+                                  action: () => { closeSheet(); m === 'ai' ? openRivalChooser() : applyMode(m); } })),
             { label: 'Keep playing', ghost: true, action: closeSheet }
         ],
         'target'
@@ -4357,7 +4464,15 @@ function startMode(mode) {
     playSound('select');
     paintStartModes();
     document.getElementById('start').hidden = true;
+    // VS CPU asks who; the other two have nobody to choose
+    if (mode === 'ai') return openRivalChooser();
     applyMode(mode);
+}
+
+function backToModes() {
+    playSound('tap');
+    document.getElementById('chooser').hidden = true;
+    document.getElementById('start').hidden = false;
 }
 
 function paintStartModes() {
