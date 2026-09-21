@@ -140,14 +140,19 @@ header {
     position: sticky;
     top: 0;
     z-index: 30;
-    display: flex;
+    /* three columns with equal sides, so the score sits on the centre line of
+       the bar rather than wherever the controls beside it happen to end */
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
     align-items: center;
-    justify-content: space-between;
     gap: 8px;
     padding: 10px 12px;
     background: var(--panel);
     border-bottom: 3px solid var(--panel-line);
 }
+header > .logo-title { justify-self: start; }
+header > .scoreline { justify-self: center; }
+header > .header-actions { justify-self: end; }
 .logo-wrap { display: flex; align-items: center; gap: 9px; min-width: 0; }
 .logo-mark {
     width: 38px; height: 38px; flex: none;
@@ -191,28 +196,65 @@ header {
 .scoreline .dash { color: var(--panel-fg-dim); font-size: 11px; }
 
 /* Hot-seat: the two players sit at opposite ends of the phone, so a bar across
-   the top is upside down and out of reach for one of them. In 2-player mode the
-   whole header is turned on its side and parked down the left edge — contents
-   and all, so the score pill and icons keep their own layout and simply come
-   along for the ride. Reading order survives the turn: logo at the near end,
-   controls at the far one, just as across the top. */
-body.pvp {
-    --rail: 56px;
-    padding-left: var(--rail);
+   the top belongs to neither of them. A rail down the side reads from both
+   seats but costs 56px of a 390px screen for good. Instead the header goes
+   entirely — logo and all — and the two controls worth having mid-match, the
+   score and the mode, move to the dead space beside the message bubble, turned
+   on their side so they face neither player and both. How to play and sound
+   are a match apart: they live in the record card, which the score opens. */
+body.pvp header { display: none; }
+/* one control on each side of the bubble, both turned the same way. The slots
+   are a fixed, equal width so the bubble sits on the centre line; each holds a
+   rotated button, which is narrower than its slot and taller than the row —
+   hence the min-height, so it has somewhere to go. */
+body.pvp .hs-slot {
+    display: flex; align-items: center; justify-content: center;
+    flex: 0 0 44px;
+    min-width: 0;
 }
-body.pvp header {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100svh;          /* the bar's long axis, measured before the turn */
-    height: var(--rail);
-    transform-origin: 0 0;
-    transform: translateY(100svh) rotate(-90deg);
-}
-/* the narrow-screen rule below stretches these across a bar that is now as long
-   as the screen is tall */
+body.pvp .hs-slot > * { transform: rotate(-90deg); flex: none; white-space: nowrap; }
+/* the far control turns the other way, so the pair mirrors across the board */
+body.pvp #hs-right > * { transform: rotate(90deg); }
 body.pvp .header-actions { width: auto; }
-body.pvp main { padding: 10px 8px 12px; }
+body.pvp #mode-btn { font-size: 10.5px; padding: 7px 9px; }
+body.pvp .scoreline { font-size: 17px; padding: 3px 8px; }
+body.pvp .bubble-wrap {
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 88px;
+}
+body.pvp .bubble { max-width: calc(100% - 128px); }
+body.pvp main { padding: 10px 12px 14px; }
+.hs-slot { display: none; }
+
+/* nothing starts until a mode is picked — the game opens on the choice rather
+   than dropping you into a rival you did not ask for */
+#start {
+    position: fixed; inset: 0; z-index: 85;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    background-color: var(--page);
+    background-image: radial-gradient(var(--page-dot) 1.2px, transparent 1.2px);
+    background-size: 7px 7px;
+}
+#start[hidden] { display: none; }
+.start-card { width: 100%; max-width: 330px; padding: 22px 20px; text-align: center; }
+.start-logo { font-size: 52px; margin: 0; }
+.start-sub {
+    margin: 2px 0 18px; font-size: 11px; font-weight: 700;
+    letter-spacing: .1em; text-transform: uppercase; color: var(--panel-fg-dim);
+}
+.start-modes { display: flex; flex-direction: column; gap: 10px; }
+.start-modes .btn { flex-direction: column; gap: 3px; padding: 12px 10px; }
+.start-modes .btn .t {
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font-family: var(--font-display); font-size: 21px; font-weight: 400; letter-spacing: .02em;
+}
+.start-modes .btn .icon { width: 21px; height: 21px; }
+.act-ic { display: inline-flex; flex: none; }
+.act-ic .icon { width: 17px; height: 17px; }
+.start-modes .btn .d { font-size: 10px; font-weight: 700; opacity: .62; line-height: 1.35; }
 
 /* the ladder: who is beaten, who is in front of you, who is still waiting */
 #tourney-bar {
@@ -290,6 +332,8 @@ main {
     padding: 0;
 }
 .avatar .portrait { width: 100%; height: 100%; display: block; }
+#p2-avatar { cursor: pointer; transition: transform .08s ease; }
+#p2-avatar:active { transform: scale(.92); }
 
 /* portraits blink, sweat when they lose a hand, and gloat when they take one */
 .portrait .lid {
@@ -394,6 +438,12 @@ main {
     display: inline-block;
 }
 
+/* The hard shadow is what makes a card look tappable, so only a card you can
+   actually act on gets one. Everything else sits back on a faint one — chiefly
+   the rival's hands while you are still choosing your own, which a new player
+   read as "tap me first". No transform here: shifting the cards on every turn
+   would jitter the whole row. */
+.hand-card.waiting { box-shadow: 2px 2px 0 rgba(36, 31, 46, .22); cursor: default; }
 .hand-card.selected { transform: translateY(-4px); box-shadow: 6px 10px 0 var(--gold), 0 0 0 3px var(--gold); }
 .hand-card.target { animation: targetBlink 1s infinite ease-in-out; }
 @keyframes targetBlink {
@@ -773,6 +823,11 @@ main {
 .stats-row.won { background: #dff3e6; }
 .stats-row.lost { background: #ffe3e8; }
 .stats-empty { font-size: 11.5px; font-weight: 700; color: var(--panel-fg-dim); text-align: center; padding: 14px 0; }
+.stats-extra { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-bottom: 10px; }
+.stats-extra[hidden] { display: none; }
+.stats-extra .btn { padding: 10px 6px; gap: 6px; }
+.stats-extra .icon { width: 15px; height: 15px; }
+.sound-ic { display: inline-flex; flex: none; }
 .stats-close { width: 100%; padding: 11px; font-size: 13px; }
 
 /* The board is built end to end for two players facing each other, so a phone
@@ -878,9 +933,15 @@ main {
     /* Half / Shift drop to their own full-width row rather than overflow */
     .deck-moves { width: 100%; }
     .deck-moves .btn { flex: 1; }
-    /* title takes one row, controls the next, so nothing is pushed off-screen */
-    header { flex-wrap: wrap; row-gap: 9px; }
-    .header-actions { width: 100%; justify-content: space-between; }
+    /* title and score take one row, controls the next, so nothing is pushed
+       off-screen — and the score keeps the centre line either way */
+    header { row-gap: 9px; }
+    header > .header-actions {
+        grid-column: 1 / -1;
+        justify-self: stretch;
+        justify-content: space-between;
+        width: auto;
+    }
 }
 @media (max-width: 360px) {
     .hand-card { height: 150px; }
@@ -894,15 +955,13 @@ main {
 <div id="whiteflash"></div>
 
 <header>
-    <h1 class="logo-title">Fingaz</h1>
+    <h1 class="logo-title">Fingaz!</h1>
+    <button class="scoreline" id="score-btn" title="Record & difficulty">
+        <span class="s1" id="score-p1">0</span>
+        <span class="dash">—</span>
+        <span class="s2" id="score-p2">0</span>
+    </button>
     <div class="header-actions">
-        <button class="scoreline" id="score-btn" title="Record & difficulty">
-            <span class="s1" id="score-p1">0</span>
-            <span class="dash">—</span>
-            <span class="s2" id="score-p2">0</span>
-        </button>
-        <button class="btn btn-icon" id="help-btn" title="How to play">?</button>
-        <button class="btn btn-icon" id="sound-btn" title="Sound"></button>
         <button class="btn btn-sm btn-gold" id="mode-btn">VS CPU</button>
     </div>
 </header>
@@ -941,7 +1000,7 @@ main {
 
         <div class="nameplate" id="p2-nameplate">
             <div class="who">
-                <div class="avatar" id="p2-avatar"></div>
+                <div class="avatar" id="p2-avatar" title="Choose your rival"></div>
                 <div>
                     <div class="label">
                         <span id="p2-name">Rival</span>
@@ -977,11 +1036,13 @@ main {
     </section>
 
     <div class="bubble-wrap">
+        <div class="hs-slot" id="hs-left"></div>
         <div class="rival-shout" id="rival-shout" hidden>
             <span class="rs-name" id="rs-name">Rival</span>
             <span class="rs-text" id="rs-text"></span>
         </div>
         <div class="bubble" id="bubble">Pick one of your hands, then tap a rival hand to strike!</div>
+        <div class="hs-slot" id="hs-right"></div>
     </div>
 
     <section class="p1-side">
@@ -1031,6 +1092,14 @@ main {
 
 </main>
 
+<div id="start">
+    <div class="start-card panel">
+        <h1 class="logo-title start-logo">Fingaz!</h1>
+        <p class="start-sub">A hand-to-hand duel for two thumbs</p>
+        <div class="start-modes" id="start-modes"></div>
+    </div>
+</div>
+
 <div id="upright" aria-hidden="true">
     <div class="upright-card panel">
         <svg viewBox="0 0 64 64" class="upright-art" fill="none" stroke="currentColor"
@@ -1073,6 +1142,13 @@ main {
             <div class="stats-trophies" id="stats-trophies" hidden></div>
             <div class="stats-head">Recent games</div>
             <div class="stats-list" id="stats-list"></div>
+            <div class="stats-extra" id="stats-extra">
+                <button class="btn btn-sm" id="stats-help"><span data-icon="book"></span> How to play</button>
+                <button class="btn btn-sm" id="stats-sound">
+                    <span class="sound-ic" id="stats-sound-icon"></span>
+                    <span id="stats-sound-label">Sound on</span>
+                </button>
+            </div>
         </div>
         <div class="stats-pane" id="pane-setup" hidden>
             <div class="stats-head" id="diff-head">Choose your rival</div>
@@ -1136,6 +1212,32 @@ const ICONS = {
         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
         <path d="M3.4 9.2h3.6L11.8 5v14L7 14.8H3.4z" fill="currentColor"/>
         <path d="M15.6 9.6l5.2 5.2M20.8 9.6l-5.2 5.2"/></svg>`,
+
+    /* one rival: a face with the duelist's slanted eyes */
+    rivalFace: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 4.6 9.2 C 4.6 5, 7.9 2.6, 12 2.6 C 16.1 2.6, 19.4 5, 19.4 9.2
+                 L 19.4 12.8 C 19.4 17.6, 16.1 21.4, 12 21.4
+                 C 7.9 21.4, 4.6 17.6, 4.6 12.8 Z"/>
+        <path d="M 7.8 10 L 10.6 11.4"/><path d="M 16.2 10 L 13.4 11.4"/>
+        <path d="M 9.4 16.4 q 2.6 1.7 5.2 0"/></svg>`,
+
+    /* hot-seat: one phone going back and forth */
+    phoneSwap: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="8.6" y="2.6" width="6.8" height="18.8" rx="2.2"/>
+        <path d="M 10.8 5.4 h 2.4"/>
+        <path d="M 4.6 15.8 V 7.6"/><path d="M 2.5 10 L 4.6 7.2 L 6.7 10"/>
+        <path d="M 19.4 8.2 V 16.4"/><path d="M 21.5 14 L 19.4 16.8 L 17.3 14"/></svg>`,
+
+    /* the run, and what it pays out */
+    trophy: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M 6.8 3.2 H 17.2 V 9 A 5.2 5.2 0 0 1 6.8 9 Z"/>
+        <path d="M 6.8 5 H 4.2 A 3 3 0 0 0 7.2 8.8"/>
+        <path d="M 17.2 5 H 19.8 A 3 3 0 0 1 16.8 8.8"/>
+        <path d="M 12 14.2 V 17.4"/>
+        <path d="M 8.4 21.2 H 15.6 L 14.6 17.4 H 9.4 Z"/></svg>`,
 
     book: `<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor"
         stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
@@ -2281,7 +2383,7 @@ function updateUI() {
     });
 
     ['p1-hand-left', 'p1-hand-right', 'p2-hand-left', 'p2-hand-right'].forEach(id =>
-        document.getElementById(id).classList.remove('selected', 'target'));
+        document.getElementById(id).classList.remove('selected', 'target', 'waiting'));
 
     if (gameState.selectedHand) {
         const s = gameState.selectedHand;
@@ -2299,6 +2401,15 @@ function updateUI() {
             if (gameState[defender][side] > 0) document.getElementById(`${defender}-hand-${side}`).classList.add('target');
         });
     }
+
+    // a card is only raised while it can be tapped: your own hands on your turn,
+    // the rival's once you have picked one and they are a target
+    const yours = gameState.turn === 'p1' || gameState.mode === 'pvp';
+    ['p1', 'p2'].forEach(w => ['left', 'right'].forEach(side => {
+        const live = gameState[w][side] > 0 && yours && !gameState.locked;
+        const tappable = live && (w === attacker || showTargets);
+        document.getElementById(`${w}-hand-${side}`).classList.toggle('waiting', !tappable);
+    }));
 
     // show what each hit would do, so the sum is visible before committing
     const flipPreview = gameState.mode === 'pvp' && attacker === 'p2';
@@ -2851,10 +2962,10 @@ function showStatsTab(name) {
     });
 }
 
-function openStats() {
+function openStats(tab = 'record') {
     playSound('tap');
     document.getElementById('stats').hidden = false;
-    showStatsTab('record');
+    showStatsTab(tab);
     renderStats();
 }
 function closeStats() { playSound('tap'); document.getElementById('stats').hidden = true; }
@@ -3337,7 +3448,15 @@ function openSheet(title, body, actions, icon = 'spark', isPortrait = false, ori
     actions.forEach(a => {
         const btn = document.createElement('button');
         btn.className = 'btn' + (a.ghost ? ' wide' : ' btn-gold');
-        btn.textContent = a.label;
+        if (a.icon && ICONS[a.icon]) {
+            const ic = document.createElement('span');
+            ic.className = 'act-ic';
+            ic.innerHTML = ICONS[a.icon];
+            btn.appendChild(ic);
+        }
+        const text = document.createElement('span');
+        text.textContent = a.label;
+        btn.appendChild(text);
         btn.onclick = a.action;
         wrap.appendChild(btn);
     });
@@ -3384,6 +3503,13 @@ function applyMode(mode) {
     const pvp = mode === 'pvp';
     lastFoeArt = null;
     document.getElementById('p2-deck-avatar').innerHTML = renderPortrait('player2');
+    // the same buttons, carrying their handlers, rather than a second set
+    // score to one side of the bubble, mode to the other; in single player they
+    // both go home to the header
+    (pvp ? document.getElementById('hs-left') : document.querySelector('header'))
+        .appendChild(document.getElementById('score-btn'));
+    (pvp ? document.getElementById('hs-right') : document.querySelector('header'))
+        .appendChild(document.querySelector('.header-actions'));
     document.getElementById('p1-name').textContent = pvp ? 'P1' : 'YOU';
     document.getElementById('p2-deck').hidden = !pvp;
     document.getElementById('p2-nameplate').hidden = pvp;
@@ -3393,9 +3519,10 @@ function applyMode(mode) {
 
 /* switching modes throws away the current match, so ask first */
 const MODE_PITCH = {
-    ai:      { label: 'VS CPU',      line: `one rival, your pick.` },
-    pvp:     { label: '2 player',    line: 'pass one phone between you, decks facing each other.' },
-    tourney: { label: 'Tourney',     line: `all ${TOURNEY_ORDER.length} rivals back to back for the trophy \u2014 lose once and the run is over.` }
+    ai:      { label: 'VS CPU',   icon: 'rivalFace', line: `one rival, your pick.` },
+    pvp:     { label: '2 player', icon: 'phoneSwap', line: 'pass one phone between you, decks facing each other.' },
+    tourney: { label: 'Tourney',  icon: 'trophy',
+               line: `all ${TOURNEY_ORDER.length} rivals back to back for the trophy \u2014 lose once and the run is over.` }
 };
 
 document.getElementById('mode-btn').addEventListener('click', () => {
@@ -3407,7 +3534,7 @@ document.getElementById('mode-btn').addEventListener('click', () => {
         others.map(m => `${MODE_PITCH[m].label} \u2014 ${MODE_PITCH[m].line}`).join('\n') +
         '\n\nEither one ends the current match and resets the score.',
         [
-            ...others.map(m => ({ label: MODE_PITCH[m].label, action: () => applyMode(m) })),
+            ...others.map(m => ({ label: MODE_PITCH[m].label, icon: MODE_PITCH[m].icon, action: () => applyMode(m) })),
             { label: 'Keep playing', ghost: true, action: closeSheet }
         ],
         'target'
@@ -3419,13 +3546,15 @@ function paintIcons(root = document) {
 }
 
 /* one mute control for effects and music together */
-document.getElementById('sound-btn').addEventListener('click', e => {
-    const on = !soundEnabled;
+function setSound(on) {
     soundEnabled = on;
     musicOn = on;
-    e.currentTarget.innerHTML = on ? ICONS.soundOn : ICONS.soundOff;
+    document.getElementById('stats-sound-icon').innerHTML = on ? ICONS.soundOn : ICONS.soundOff;
+    document.getElementById('stats-sound-label').textContent = on ? 'Sound on' : 'Sound off';
     if (on) startMusic(); else stopMusic();
-});
+}
+document.getElementById('stats-sound').addEventListener('click', () => { playSound('tap'); setSound(!soundEnabled); });
+document.getElementById('stats-help').addEventListener('click', () => { closeStats(); showRules(); });
 
 /* Browsers block audio until a gesture, and the gesture that works varies by
    browser — so keep trying on each one until the context is really running. */
@@ -3440,16 +3569,30 @@ function tryStartMusic() {
 }
 MUSIC_GESTURES.forEach(ev => addEventListener(ev, tryStartMusic, { passive: true }));
 
-document.getElementById('help-btn').addEventListener('click', showRules);
-document.getElementById('score-btn').addEventListener('click', openStats);
+document.getElementById('score-btn').addEventListener('click', () => openStats());
+
+/* the face you are playing is the most obvious place to ask for a different
+   one, so it opens the card on the rival tab */
+document.getElementById('p2-avatar').addEventListener('click', () => openStats('setup'));
+
+function startMode(mode) {
+    playSound('select');
+    document.getElementById('start').hidden = true;
+    applyMode(mode);
+}
+
+document.getElementById('start-modes').innerHTML = Object.entries(MODE_PITCH).map(([k, m]) =>
+    `<button class="btn ${k === 'tourney' ? 'btn-gold' : k === 'pvp' ? 'btn-p2' : 'btn-p1'}"
+             onclick="startMode('${k}')">
+        <span class="t">${ICONS[m.icon]}${m.label}</span><span class="d">${m.line}</span>
+     </button>`).join('');
 
 loadSaved();
 paintIcons();
-document.getElementById('sound-btn').innerHTML = ICONS.soundOn;
+setSound(soundEnabled);
 document.getElementById('p1-avatar').innerHTML = renderPortrait('hero');
 document.getElementById('p2-avatar').innerHTML = renderPortrait('rival');
 updateUI();
-openToss();
 
 /* offline support only applies when served over http(s) — opening the file
    directly still works, it just skips this. */
