@@ -191,54 +191,27 @@ header {
 .scoreline .dash { color: var(--panel-fg-dim); font-size: 11px; }
 
 /* Hot-seat: the two players sit at opposite ends of the phone, so a bar across
-   the top is upside down and out of reach for one of them. In 2-player mode it
-   becomes a rail down the left edge, which reads the same from either end. */
-body.pvp { flex-direction: row; }
+   the top is upside down and out of reach for one of them. In 2-player mode the
+   whole header is turned on its side and parked down the left edge — contents
+   and all, so the score pill and icons keep their own layout and simply come
+   along for the ride. Reading order survives the turn: logo at the near end,
+   controls at the far one, just as across the top. */
+body.pvp {
+    --rail: 56px;
+    padding-left: var(--rail);
+}
 body.pvp header {
-    flex: none;
-    align-self: flex-start;
-    flex-direction: column;
-    flex-wrap: nowrap;
-    justify-content: flex-start;
-    gap: 14px;
-    width: 56px;
-    height: 100svh;
-    padding: 12px 6px;
-    border-bottom: 0;
-    border-right: 3px solid var(--panel-line);
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100svh;          /* the bar's long axis, measured before the turn */
+    height: var(--rail);
+    transform-origin: 0 0;
+    transform: translateY(100svh) rotate(-90deg);
 }
-/* vertical-rl alone lays the letters tops-to-the-edge; the half turn faces them
-   into the board instead, the way a spine or an axis label reads */
-body.pvp .logo-title {
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    font-size: 23px;
-    letter-spacing: .04em;
-}
-/* controls ride the middle of the rail — the nearest thing to arm's reach for
-   both players */
-body.pvp .header-actions {
-    width: auto;
-    flex-direction: column;
-    gap: 9px;
-    margin: auto 0;
-}
-/* the tally stacks the way the board does: the far player's score on top */
-body.pvp .scoreline {
-    flex-direction: column-reverse;
-    gap: 1px;
-    padding: 7px 5px;
-    line-height: 1;
-}
-body.pvp .scoreline .dash { font-size: 9px; }
-body.pvp #mode-btn {
-    writing-mode: vertical-rl;
-    transform: rotate(180deg);
-    padding: 11px 8px;
-    letter-spacing: .06em;
-}
-/* the press-shift has to carry the turn with it, or the label spins on tap */
-body.pvp #mode-btn:active:not(:disabled) { transform: translate(4px, 4px) rotate(180deg); }
+/* the narrow-screen rule below stretches these across a bar that is now as long
+   as the screen is tall */
+body.pvp .header-actions { width: auto; }
 body.pvp main { padding: 10px 8px 12px; }
 
 /* ============================================================
@@ -864,7 +837,7 @@ main {
             <div class="power-row">
                 <button class="btn power btn-p1" id="p2-btn-sub" onclick="activateAbility('subtraction')">
                     <span class="t"><span data-icon="scissors" class="ic-minus"></span> MINUS</span>
-                    <span class="d">Trim the rival</span>
+                    <span class="d">Snip with a hand</span>
                 </button>
                 <button class="btn power btn-p2" id="p2-btn-team" onclick="activateAbility('team')">
                     <span class="t"><span data-icon="fists" class="ic-team"></span> TEAM</span>
@@ -953,7 +926,7 @@ main {
             <div class="power-row">
                 <button class="btn power btn-p1" id="btn-sub" onclick="activateAbility('subtraction')">
                     <span class="t"><span data-icon="scissors" class="ic-minus"></span> MINUS</span>
-                    <span class="d">Trim the rival</span>
+                    <span class="d">Snip with a hand</span>
                 </button>
                 <button class="btn power btn-p2" id="btn-team" onclick="activateAbility('team')">
                     <span class="t"><span data-icon="fists" class="ic-team"></span> TEAM</span>
@@ -2342,15 +2315,21 @@ function activateAbility(key) {
 
 function pickTrimAmount(target, side) {
     closeSheet();
+    const me = gameState.turn;
     const cur = gameState[target][side];
+    /* The snip is worth exactly what one of your own hands is holding — you
+       pick which hand supplies it, not an arbitrary number. */
     const buttons = [];
-    for (let trim = 1; trim <= cur; trim++) {
-        const left = cur - trim;
+    ['left', 'right'].forEach(mySide => {
+        const trim = gameState[me][mySide];
+        if (trim <= 0) return;
+        const left = Math.max(0, cur - trim);
         buttons.push({
-            label: left <= 0 ? `−${trim} · WIPE OUT` : `−${trim} · leaves ${left}`,
+            label: `${mySide === 'left' ? 'Left' : 'Right'} hand (${trim}) · ` +
+                   (left <= 0 ? 'WIPE OUT' : `leaves ${left}`),
             action: () => {
-                gameState[target][side] = Math.max(0, left);
-                gameState[gameState.turn].abilities.subtraction = false;
+                gameState[target][side] = left;
+                gameState[me].abilities.subtraction = false;
                 playSound('slash');
                 haptic(55);
                 const id = `${target}-hand-${side}`;
@@ -2367,9 +2346,11 @@ function pickTrimAmount(target, side) {
                 if (!checkWin()) switchTurn();
             }
         });
-    }
+    });
     buttons.push({ label: 'Cancel', ghost: true, action: closeSheet });
-    openSheet('Trim fingers', `That hand has ${cur} finger${cur === 1 ? '' : 's'}. How many do you snip?`, buttons, 'scissors');
+    openSheet('Trim fingers',
+        `That hand has ${cur} finger${cur === 1 ? '' : 's'}. Which of your hands do you snip with?`,
+        buttons, 'scissors');
 }
 
 function triggerSplitModal() {
@@ -2659,13 +2640,19 @@ function cpuTurn() {
         // often misses the finish, rarely trims — beatable by a child
         if (winning && Math.random() < .35) return go(winning);
         if (canHalfSplit('p2') && Math.random() < .5) return triggerHalfSplit();
-        if (p2.abilities.subtraction && yours.length === 1 && Math.random() < .2) return cpuTrim(yours[0], 1);
+        if (p2.abilities.subtraction && Math.random() < .2) {
+            const t = cpuTrimPick(true);
+            if (t) return cpuTrim(t.side, t.amount);
+        }
         return go(rand(moves));
     }
 
     if (difficulty === 'hard') {
         if (winning) return go(winning);
-        if (p2.abilities.subtraction && yours.length === 1) return cpuTrim(yours[0], p1[yours[0]]);
+        if (p2.abilities.subtraction) {
+            const t = cpuTrimPick();
+            if (t && (t.wipes || yours.length === 1)) return cpuTrim(t.side, t.amount);
+        }
         if (canHalfSplit('p2')) return triggerHalfSplit();
         // prefer a knockout, and among equals the move that leaves it least exposed
         const kills = moves.filter(m => m.kills);
@@ -2678,13 +2665,28 @@ function cpuTurn() {
     if (winning) return go(winning);
     if (canHalfSplit('p2')) return triggerHalfSplit();
     if (p2.abilities.subtraction && yours.length) {
-        if (yours.length === 1) return cpuTrim(yours[0], p1[yours[0]]);
-        if (Math.random() < .45) {
-            const t = yours.reduce((a, b) => (p1[a] >= p1[b] ? a : b));
-            return cpuTrim(t, Math.min(p1[t], 1 + ((Math.random() * 2) | 0)));
-        }
+        const t = cpuTrimPick();
+        if (t && (t.wipes || yours.length === 1 || Math.random() < .45)) return cpuTrim(t.side, t.amount);
     }
     return go(moves.find(m => m.kills) || rand(moves));
+}
+
+/* Minus costs the rival nothing but is worth only what one of its own hands
+   holds, so it weighs every (own hand -> your hand) pairing and takes the one
+   that bites deepest, wiping a hand outright where it can. */
+function cpuTrimPick(anyOldOne = false) {
+    const mine = ['left', 'right'].filter(s => gameState.p2[s] > 0);
+    const yours = ['left', 'right'].filter(s => gameState.p1[s] > 0);
+    const combos = [];
+    mine.forEach(m => yours.forEach(y => {
+        const amount = gameState.p2[m];
+        const left = Math.max(0, gameState.p1[y] - amount);
+        combos.push({ side: y, amount, left, wipes: left === 0, taken: gameState.p1[y] - left });
+    }));
+    if (!combos.length) return null;
+    if (anyOldOne) return combos[(Math.random() * combos.length) | 0];
+    combos.sort((a, b) => (b.wipes - a.wipes) || (b.taken - a.taken));
+    return combos[0];
 }
 
 function cpuTrim(side, amount) {
@@ -2926,7 +2928,7 @@ function showRules() {
         <p><b>5 or more:</b> that hand is knocked out for good.</p>
         <p><b>Shift:</b> slide fingers between your own hands instead of attacking.</p>
         <p><b>Half:</b> with one hand out and an even number on the other, split it in half to bring the dead hand back.</p>
-        <p><b>Minus:</b> once per game, snip fingers off a rival hand.</p>
+        <p><b>Minus:</b> once per game, snip a rival hand down by as many fingers as you are holding on one of your own hands.</p>
         <p><b>Team:</b> once per game, attack with both hands combined. Tap it again (or one of your own hands) to change your mind.</p>`;
     openSheet('How to play', d, [{ label: 'Got it!', action: closeSheet }], 'book');
 }
