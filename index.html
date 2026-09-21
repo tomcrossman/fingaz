@@ -228,6 +228,61 @@ body.pvp .bubble { max-width: calc(100% - 128px); }
 body.pvp main { padding: 10px 12px 14px; }
 .hs-slot { display: none; }
 
+/* A rival earned is worth an entrance: the screen goes dark, the face lands
+   hard enough to shake the room, and their name slams in behind it. */
+#challenger {
+    position: fixed; inset: 0; z-index: 95;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px;
+    background: rgba(20, 17, 28, .93);
+    overflow: hidden;
+}
+#challenger[hidden] { display: none; }
+#challenger::before {
+    content: '';
+    position: absolute; inset: -30%;
+    background: repeating-conic-gradient(from 0deg at 50% 50%,
+        rgba(255,255,255,.07) 0deg 6deg, transparent 6deg 12deg);
+    animation: challengerSpin 9s linear infinite;
+}
+@keyframes challengerSpin { to { transform: rotate(360deg); } }
+.challenger-card { position: relative; text-align: center; width: 100%; max-width: 330px; }
+.challenger-kicker {
+    font-family: var(--font-display); font-size: 21px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--gold);
+}
+#challenger.run .challenger-kicker { animation: kickerIn .5s cubic-bezier(.2,1.6,.4,1) both; }
+@keyframes kickerIn { 0% { opacity: 0; transform: translateY(-18px); } 100% { opacity: 1; } }
+.challenger-face {
+    width: 168px; height: 168px; margin: 10px auto 12px;
+    border: 5px solid var(--ink); border-radius: 26px;
+    box-shadow: 9px 9px 0 var(--gold);
+    overflow: hidden; background: var(--panel);
+}
+#challenger.run .challenger-face { animation: slamIn .42s cubic-bezier(.2,1.5,.35,1) both; }
+.challenger-face svg { width: 100%; height: 100%; display: block; }
+@keyframes slamIn {
+    0%   { opacity: 0; transform: scale(2.7) rotate(-9deg); }
+    55%  { opacity: 1; transform: scale(.92) rotate(2deg); }
+    100% { opacity: 1; transform: scale(1) rotate(0); }
+}
+.challenger-name {
+    font-family: var(--font-display); font-size: 46px; line-height: .95;
+    text-transform: uppercase; color: #fff;
+}
+#challenger.run .challenger-name { animation: nameIn .4s .16s cubic-bezier(.2,1.6,.4,1) both; }
+.challenger-title {
+    font-size: 12px; font-weight: 800; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--gold-soft); margin-top: 2px;
+}
+#challenger.run .challenger-title { animation: nameIn .4s .24s cubic-bezier(.2,1.6,.4,1) both; }
+@keyframes nameIn { 0% { opacity: 0; transform: translateX(26px) skewX(-12deg); } 100% { opacity: 1; } }
+.challenger-actions {
+    display: flex; flex-direction: column; gap: 9px; margin-top: 18px;
+}
+#challenger.run .challenger-actions { animation: nameIn .4s .34s cubic-bezier(.2,1.6,.4,1) both; }
+.challenger-actions .btn { padding: 12px; font-size: 13px; }
+
 /* nothing starts until a mode is picked — the game opens on the choice rather
    than dropping you into a rival you did not ask for */
 #start {
@@ -255,6 +310,7 @@ body.pvp main { padding: 10px 12px 14px; }
 .act-ic { display: inline-flex; flex: none; }
 .act-ic .icon { width: 17px; height: 17px; }
 .start-modes .btn .d { font-size: 10px; font-weight: 700; opacity: .62; line-height: 1.35; }
+.start-modes .btn.locked { background: var(--sticker); }
 
 /* the ladder: who is beaten, who is in front of you, who is still waiting */
 #tourney-bar {
@@ -808,6 +864,10 @@ main {
     border: 2px solid var(--ink); border-radius: 9px; overflow: hidden; }
 .diff-row .btn .face svg { width: 100%; height: 100%; display: block; }
 .diff-row .btn.on { background: var(--gold); }
+/* not yet earned: the face is there, in shadow, so you can see who is coming */
+.diff-row .btn.locked { opacity: 1; }
+.diff-row .btn.locked .face { filter: grayscale(1) brightness(.45) contrast(.8); }
+.diff-row .btn.locked { color: var(--panel-fg-dim); }
 .stats-list {
     display: flex; flex-direction: column; gap: 5px;
     max-height: 190px; overflow-y: auto; margin-bottom: 14px;
@@ -1092,6 +1152,19 @@ main {
 
 </main>
 
+<div id="challenger" hidden>
+    <div class="challenger-card">
+        <div class="challenger-kicker">New challenger</div>
+        <div class="challenger-face" id="challenger-face"></div>
+        <div class="challenger-name" id="challenger-name">Rival</div>
+        <div class="challenger-title" id="challenger-title">the Duelist</div>
+        <div class="challenger-actions">
+            <button class="btn btn-gold" id="challenger-fight">Fight them now</button>
+            <button class="btn wide" id="challenger-later">Not yet</button>
+        </div>
+    </div>
+</div>
+
 <div id="start">
     <div class="start-card panel">
         <h1 class="logo-title start-logo">Fingaz!</h1>
@@ -1304,6 +1377,30 @@ const RIVAL_HANDS = {
         cuff: '#6E51A8', cuffShade: '#4E3880',     // silk, tied in a bow
         style: 'ribbon'
     },
+    hana: {
+        skin: '#FFE0CB', shade: '#F0C4A6', line: '#46323C',
+        nail: '#F06E9C', nailLine: '#C74B78',      // pink lacquer, freshly done
+        cuff: '#F06E9C', cuffShade: '#C74B78',
+        style: 'ribbon'
+    },
+    tetsu: {
+        skin: '#E9C3A0', shade: '#D0A47E', line: '#3C3630',
+        nail: '#DCB395', nailLine: '#AD8364',      // blunt, unpainted
+        cuff: '#6B7280', cuffShade: '#474D57',     // strapping, wound tight
+        style: 'wrap'
+    },
+    hebi: {
+        skin: '#F6DCBE', shade: '#E0B893', line: '#33402F',
+        nail: '#8FD14F', nailLine: '#5E9430',      // venom green
+        cuff: '#2F6B4A', cuffShade: '#1D4A32',
+        style: 'glove'
+    },
+    kage: {
+        skin: '#F4D9C2', shade: '#DDB699', line: '#2A2C3E',
+        nail: '#3A4468', nailLine: '#20263E',
+        cuff: '#232A47', cuffShade: '#141931',     // wraps, to the knuckle
+        style: 'wrap'
+    },
     oni: {
         skin: '#E8A188', shade: '#CE8069', line: '#3A2020',
         nail: '#2A2434', nailLine: '#120E1B',      // blunt black claws
@@ -1314,7 +1411,8 @@ const RIVAL_HANDS = {
 
 /* the pastel behind each rival's hands */
 const FOE_SOFT = { momo: '#FCEFC6', rival: '#FFD8E2', yurei: '#E6E1F3', player2: '#FFD8E2',
-                   taiga: '#FFE0C6', rin: '#E4DAF7', oni: '#FBCFC3' };
+                   taiga: '#FFE0C6', rin: '#E4DAF7', oni: '#FBCFC3',
+                   hana: '#FFDDEC', tetsu: '#DCE2E8', hebi: '#DAEFD6', kage: '#D8DEF2' };
 
 function paletteFor(who) {
     if (who !== 'p2' || gameState.mode !== 'ai') return PALETTE[who];
@@ -1574,6 +1672,22 @@ const PORTRAITS = {
     oni: {
         bg: '#F7C9BE', hair: '#7B2D26', hair2: '#551C18', skin: '#E8A188', shade: '#CE8069',
         cloth: '#2A2434', cloth2: '#181321', eye: '#F4B32C', ink: '#1A1524', trim: '#F4B32C'
+    },
+    hana: {
+        bg: '#FFE4EF', hair: '#3E3348', hair2: '#2A2233', skin: '#FFE0CB', shade: '#F0BE9E',
+        cloth: '#F06E9C', cloth2: '#C74B78', eye: '#F06E9C', ink: '#241F2E', trim: '#FFD1E2'
+    },
+    tetsu: {
+        bg: '#DDE3E8', hair: '#5A6472', hair2: '#3D4552', skin: '#E9C3A0', shade: '#CFA47E',
+        cloth: '#6B7280', cloth2: '#474D57', eye: '#4A5563', ink: '#241F2E', trim: '#B6BEC8'
+    },
+    hebi: {
+        bg: '#DFF3DC', hair: '#2F6B4A', hair2: '#1D4A32', skin: '#F6DCBE', shade: '#E0B893',
+        cloth: '#28402F', cloth2: '#18281D', eye: '#8FD14F', ink: '#241F2E', trim: '#8FD14F'
+    },
+    kage: {
+        bg: '#DCE1F2', hair: '#2B3358', hair2: '#1A2040', skin: '#F4D9C2', shade: '#DDB699',
+        cloth: '#232A47', cloth2: '#141931', eye: '#5AA9E6', ink: '#1B1A2A', trim: '#5AA9E6'
     },
     player2: {
         bg: '#C9F2E4', hair: '#E2703A', hair2: '#B94F24', skin: '#FFDCC0', shade: '#F0B892',
@@ -1835,6 +1949,99 @@ function portraitOni(P, n) {
               stroke-width="1.4" stroke-linecap="round"/>`;
 }
 
+/* eager and tidy — a bob, a flower, and a lot to prove */
+function portraitHana(P, n) {
+    return `
+        <path d="M 11 46 C 10 18, 21 3, 32 3 C 43 3, 54 18, 53 46
+                 L 45 44 C 47 30, 46 22, 43 17 C 38 24, 26 24, 21 17
+                 C 18 22, 17 30, 19 44 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 21 27 q 4.5 -2.2 8 -.2 M 43 27 q -4.5 -2.2 -8 -.2"
+              fill="none" stroke="${P.ink}" stroke-width="1.5" stroke-linecap="round"/>
+        ${pEye(24.5, 34, P)}
+        ${pEye(39.5, 34, P)}
+        <path d="M 27 41.5 q 5 4.6 10 0" fill="none" stroke="${P.ink}" stroke-width="1.7" stroke-linecap="round"/>
+        <g clip-path="url(#pf${n})">
+            <ellipse cx="21.5" cy="39" rx="3.2" ry="1.9" fill="${P.cloth}" opacity=".26"/>
+            <ellipse cx="42.5" cy="39" rx="3.2" ry="1.9" fill="${P.cloth}" opacity=".26"/>
+        </g>
+        <path d="M 14 30 C 13 11, 23 4, 32 4 C 41 4, 51 11, 50 30
+                 C 48 21, 43 16.5, 35 17 C 33 21, 32.5 24, 32.5 27
+                 C 29 19.5, 21 17.5, 14.5 24 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <g stroke="${P.ink}" stroke-width="1.4">
+            <circle cx="46.5" cy="13" r="3.6" fill="${P.trim}"/>
+            <circle cx="52" cy="15.5" r="3.2" fill="${P.trim}"/>
+            <circle cx="49" cy="19.5" r="3.2" fill="${P.trim}"/>
+            <circle cx="49.4" cy="15.9" r="1.5" fill="${P.cloth}"/>
+        </g>`;
+}
+
+/* immovable — a flat top, a heavy brow and nothing to say */
+function portraitTetsu(P, n) {
+    return `
+        <path d="M 13 30 L 13 12 L 51 12 L 51 30 C 49 21, 43 17, 32 17 C 21 17, 15 21, 13 30 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 20 26 L 29.5 28.4 M 44 26 L 34.5 28.4"
+              fill="none" stroke="${P.ink}" stroke-width="2.6" stroke-linecap="round"/>
+        ${pEye(24.5, 35, P, true)}
+        ${pEye(39.5, 35, P, true)}
+        <path d="M 27 43.5 H 37" fill="none" stroke="${P.ink}" stroke-width="2" stroke-linecap="round"/>
+        <path d="M 13.5 28 L 13.5 12.5 L 50.5 12.5 L 50.5 28
+                 C 48 20, 42.5 16.5, 32 16.5 C 21.5 16.5, 16 20, 13.5 28 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 41 20 L 47 26" fill="none" stroke="${P.ink}" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M 42.5 20.4 L 43.8 19.2 M 45 23 L 46.3 21.8" fill="none" stroke="${P.ink}"
+              stroke-width="1.2" stroke-linecap="round"/>`;
+}
+
+/* all teeth — slicked back, narrow eyed, enjoying itself */
+function portraitHebi(P, n) {
+    return `
+        <path d="M 13 34 C 12 13, 22 3, 32 3 C 42 3, 52 13, 51 34
+                 C 49 24, 43 18, 32 18 C 21 18, 15 24, 13 34 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 20.5 27.6 L 29.5 26.8 M 43.5 27.6 L 34.5 26.8"
+              fill="none" stroke="${P.ink}" stroke-width="1.9" stroke-linecap="round"/>
+        ${pEye(24.5, 34.5, P, true)}
+        ${pEye(39.5, 34.5, P, true)}
+        <path d="M 25.5 41 q 6.5 4.4 13 -1" fill="none" stroke="${P.ink}" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M 29 43.6 L 30.6 46.6 L 32 43.2 Z" fill="#FFF6EA" stroke="${P.ink}" stroke-width="1.1" stroke-linejoin="round"/>
+        <path d="M 14 31 C 13.5 12, 23 4, 32 4 C 41 4, 50.5 12, 50 31
+                 C 47 23, 41 19, 32 19.5
+                 C 26 20, 20 24, 17 30
+                 C 20.5 22.5, 26 19, 32 18.6
+                 C 25 17.6, 18 22, 14 31 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.6" stroke-linejoin="round"/>`;
+}
+
+/* the one you never see coming — hood up, mask on, one eye showing */
+function portraitKage(P, n) {
+    return `
+        <path d="M 8 58 C 6 24, 18 2, 32 2 C 46 2, 58 24, 56 58
+                 L 46 56 C 49 34, 47 20, 43 15 C 38 22, 26 22, 21 15
+                 C 17 20, 15 34, 18 56 Z"
+              fill="${P.hair2}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        ${pBase(P, n)}
+        <path d="M 20.5 27 q 4.5 -1.2 8 .8 M 43.5 27 q -4.5 -1.2 -8 .8"
+              fill="none" stroke="${P.ink}" stroke-width="1.6" stroke-linecap="round"/>
+        ${pEye(24.5, 34, P, true)}
+        ${pEye(39.5, 34, P, true)}
+        <path d="M 16 38 C 22 35.5, 42 35.5, 48 38 L 47 44 C 41 48.5, 23 48.5, 17 44 Z"
+              fill="${P.cloth}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 19 40.5 C 26 42.5, 38 42.5, 45 40.5" fill="none" stroke="${P.trim}"
+              stroke-width="1.2" stroke-linecap="round" opacity=".5"/>
+        <path d="M 11 36 C 10 13, 21 3, 32 3 C 43 3, 54 13, 53 36
+                 C 52 26, 47 19, 43 17.5
+                 C 40 23, 24 23, 21 17.5
+                 C 17 19, 12 26, 11 36 Z"
+              fill="${P.hair}" stroke="${P.ink}" stroke-width="1.7" stroke-linejoin="round"/>
+        <path d="M 21 17.5 C 24 23, 40 23, 43 17.5" fill="none" stroke="${P.ink}" stroke-width="1.5"/>`;
+}
+
 const SWEAT = `<g class="sweat">
     <path d="M 52 17 C 55.5 22, 56.5 25, 54 27 C 51 28.5, 48.6 26, 49.6 23 C 50.2 21, 51 19, 52 17 Z"
           fill="#8ed0ff" stroke="#241f2e" stroke-width="1.4" stroke-linejoin="round"/>
@@ -1843,7 +2050,8 @@ const SWEAT = `<g class="sweat">
 
 const PORTRAIT_ART = {
     rival: portraitRival, player2: portraitPlayer2, momo: portraitMomo,
-    yurei: portraitYurei, taiga: portraitTaiga, rin: portraitRin, oni: portraitOni
+    yurei: portraitYurei, taiga: portraitTaiga, rin: portraitRin, oni: portraitOni,
+    hana: portraitHana, tetsu: portraitTetsu, hebi: portraitHebi, kage: portraitKage
 };
 
 function renderPortrait(kind) {
@@ -2775,6 +2983,14 @@ const TAUNTS = {
         victory: ['Told you I was ready!', 'Good scrap! Bring a better one.', 'Hah! Beat the apprentice first.'],
         beaten: ['Rematch. Right now.', 'I was only warming up!', 'Fine \u2014 you earned it. Barely.']
     },
+    keen: {
+        hit:  ['I practised that one.', 'Textbook.', 'Noted, and countered.'],
+        ko:   ['One hand down, as drilled.', 'That is the training working.', 'Next!'],
+        trim: ['Trimming. Neatly.', 'Precision first.'],
+        hurt: ['Noted. I will fix that.', 'Ooh \u2014 that was clever.', 'Hmm! Adjusting.'],
+        victory: ['I studied for this!', 'Momo will never believe me.', 'Thank you for the match!'],
+        beaten: ['Back to the drills.', 'You are my homework now.', 'Again? I learn fast.']
+    },
     normal: {
         hit:  ['Take that!', 'You are wide open.', 'Keep up.'],
         ko:   ['One down!', 'That hand is finished.', 'Getting easier now.'],
@@ -2782,6 +2998,14 @@ const TAUNTS = {
         hurt: ['Hmph. Not bad.', 'Lucky hit.', 'I was going easy on you.'],
         victory: ['Better luck next time.', 'Told you to keep up.', 'That is how it is done.'],
         beaten: ['Alright \u2014 you earned that one.', 'Not bad. Rematch?', 'Hmph. I want another go.']
+    },
+    stubborn: {
+        hit:  ['Move.', 'Still standing.', 'Push harder.'],
+        ko:   ['Down.', 'One less.', 'Hm.'],
+        trim: ['Cut.', 'Trimmed.'],
+        hurt: ['Barely.', 'Noted.', 'Again.'],
+        victory: ['You pushed. I stood.', 'Nothing moved.', 'Come back heavier.'],
+        beaten: ['\u2026You moved me.', 'First time for that.', 'Good. Again.']
     },
     cunning: {
         hit:  ['You looked away.', 'Oh dear. Was that one yours?', 'I did warn you. Sort of.'],
@@ -2791,6 +3015,14 @@ const TAUNTS = {
         victory: ['Like clockwork.', 'You played beautifully into it.', 'Again? You will lose again.'],
         beaten: ['Well well. You were paying attention.', 'Cute. Do it twice.', 'I let you have that one, obviously.']
     },
+    reckless: {
+        hit:  ['Sssplendid!', 'Oh, that had to sting.', 'More! Again!'],
+        ko:   ['One down \u2014 delicious.', 'Snap!', 'Gone, just like that.'],
+        trim: ['A little off, yes?', 'Snip snip. Sssweet.'],
+        hurt: ['Ooh! You bite back!', 'Hah! Yes!', 'You have teeth. Good.'],
+        victory: ['All that, and nothing left of you!', 'You played so recklessly. I loved it.', 'Again? I am still hungry.'],
+        beaten: ['You gambled better. Rude.', 'Hsss. Lucky.', 'Again! Double or nothing!']
+    },
     hard: {
         hit:  ['Predictable.', 'Too slow.', 'Is that everything?'],
         ko:   ['Finished.', 'One hand left. Count it.', 'You never had a chance.'],
@@ -2798,6 +3030,14 @@ const TAUNTS = {
         hurt: ['...', 'Enjoy it while it lasts.', 'A minor setback.'],
         victory: ['Was that your best?', 'Predictable, from start to finish.', 'Do not waste my time again.'],
         beaten: ['\u2026Impossible.', 'Enjoy it. It will not happen twice.', 'You got lucky. Nothing more.']
+    },
+    ruthless: {
+        hit:  ['One shot.', 'Measured.', 'Already counted.'],
+        ko:   ['Clean.', 'Range confirmed.', 'Done.'],
+        trim: ['Adjusted.', 'Trimmed to fit.'],
+        hurt: ['Recalculating.', 'Noted.', 'Mm.'],
+        victory: ['You were counted from the first roll.', 'Nothing personal. Only maths.', 'Predictable spacing.'],
+        beaten: ['My count was wrong.', 'Rare. Well played.', 'I will adjust.']
     },
     brutal: {
         hit:  ['Break.', 'You were finished before this.', 'Stay down.'],
@@ -2890,26 +3130,67 @@ const pace = ms => Math.round(ms * (SPEEDS[speed] || SPEEDS.steady).k);
                  safe:   among those, the move that exposes it least
                  hunt:   and of the safest, the one setting up the most kills */
 const RIVALS = {
-    easy:    { name: 'Momo',     title: 'the Apprentice', art: 'momo',  level: 'Easy',
-               ai: { finish: .35, half: .5,  trim: .2,  trimBest: false, trimWipes: false, pick: 'random' } },
-    scrappy: { name: 'Taiga',    title: 'the Upstart',    art: 'taiga', level: 'Scrappy',
-               ai: { finish: .7,  half: .75, trim: .3,  trimBest: false, trimWipes: true,  pick: 'kill' } },
-    normal:  { name: 'Kurogane', title: 'the Duelist',    art: 'rival', level: 'Normal',
-               ai: { finish: 1,   half: 1,   trim: .45, trimBest: true,  trimWipes: true,  pick: 'kill' } },
-    cunning: { name: 'Rin',      title: 'the Trickster',  art: 'rin',   level: 'Cunning',
-               ai: { finish: 1,   half: 1,   trim: .7,  trimBest: true,  trimWipes: true,  pick: 'safe' } },
-    hard:    { name: 'Yurei',    title: 'the Phantom',    art: 'yurei', level: 'Hard',
-               ai: { finish: 1,   half: 1,   trim: .25, trimBest: true,  trimWipes: true,  pick: 'safe' } },
-    brutal:  { name: 'Oni',      title: 'the Warlord',    art: 'oni',   level: 'Brutal',
-               ai: { finish: 1,   half: 1,   trim: .35, trimBest: true,  trimWipes: true,  pick: 'hunt' } }
+    easy:      { name: 'Momo',     title: 'the Apprentice', art: 'momo',   level: 'Easy',
+                 ai: { finish: .35, half: .5,  trim: .2,  trimBest: false, trimWipes: false, pick: 'random' } },
+    scrappy:   { name: 'Taiga',    title: 'the Upstart',    art: 'taiga',  level: 'Scrappy',
+                 ai: { finish: .7,  half: .75, trim: .3,  trimBest: false, trimWipes: true,  pick: 'kill' } },
+    keen:      { name: 'Hana',     title: 'the Understudy', art: 'hana',   level: 'Keen',
+                 ai: { finish: .85, half: .9,  trim: .35, trimBest: true,  trimWipes: true,  pick: 'kill' } },
+    normal:    { name: 'Kurogane', title: 'the Duelist',    art: 'rival',  level: 'Normal',
+                 ai: { finish: 1,   half: 1,   trim: .45, trimBest: true,  trimWipes: true,  pick: 'kill' } },
+    stubborn:  { name: 'Tetsu',    title: 'the Wall',       art: 'tetsu',  level: 'Stubborn',
+                 ai: { finish: 1,   half: 1,   trim: .05, trimBest: true,  trimWipes: true,  pick: 'safe' } },
+    cunning:   { name: 'Rin',      title: 'the Trickster',  art: 'rin',    level: 'Cunning',
+                 ai: { finish: 1,   half: 1,   trim: .7,  trimBest: true,  trimWipes: true,  pick: 'safe' } },
+    reckless:  { name: 'Hebi',     title: 'the Serpent',    art: 'hebi',   level: 'Reckless',
+                 ai: { finish: 1,   half: .6,  trim: .5,  trimBest: true,  trimWipes: true,  pick: 'greedy' } },
+    hard:      { name: 'Yurei',    title: 'the Phantom',    art: 'yurei',  level: 'Hard',
+                 ai: { finish: 1,   half: 1,   trim: .25, trimBest: true,  trimWipes: true,  pick: 'safe' } },
+    ruthless:  { name: 'Kage',     title: 'the Sniper',     art: 'kage',   level: 'Ruthless',
+                 ai: { finish: 1,   half: 1,   trim: .3,  trimBest: true,  trimWipes: true,  pick: 'sniper' } },
+    brutal:    { name: 'Oni',      title: 'the Warlord',    art: 'oni',    level: 'Brutal',
+                 ai: { finish: 1,   half: 1,   trim: .35, trimBest: true,  trimWipes: true,  pick: 'hunt' } }
 };
 const rival = () => RIVALS[difficulty] || RIVALS.normal;
 
-/* A tourney is the whole roster back to back, easiest first, one life. It runs
-   on the ordinary CPU mode — only the rival changes between rounds — so every
-   portrait, taunt and profile works untouched. */
-const TOURNEY_ORDER = Object.keys(RIVALS);
-let tourney = null;        // { stage } while a run is on
+/* A tourney is five rivals back to back, one life. It runs on the ordinary CPU
+   mode — only the rival changes between rounds — so every portrait, taunt and
+   profile works untouched. The five are drawn one from each fifth of the
+   ladder, so a run always climbs but never has the same card twice running. */
+const ROSTER = Object.keys(RIVALS);
+const TOURNEY_ROUNDS = 5;
+
+function drawTourneyLadder() {
+    const pool = ROSTER.filter(isUnlocked);
+    const per = Math.max(1, Math.floor(pool.length / TOURNEY_ROUNDS));
+    const out = [];
+    for (let i = 0; i < TOURNEY_ROUNDS; i++) {
+        const tier = i === TOURNEY_ROUNDS - 1 ? pool.slice(i * per) : pool.slice(i * per, (i + 1) * per);
+        const from = tier.length ? tier : pool;
+        out.push(from[(Math.random() * from.length) | 0]);
+    }
+    return out;
+}
+/* The ladder opens three deep and you earn the rest: beat a rival and the next
+   one along steps up. Stored in its own right rather than counted back out of
+   the match history, which only keeps the last 60 games. */
+const STARTING_ROSTER = ROSTER.slice(0, 3);
+const TOURNEY_UNLOCK_AT = 5;
+let unlocked = STARTING_ROSTER.slice();
+let pendingChallenger = null;   // earned mid-run; shown once the run is over
+
+const isUnlocked = k => unlocked.includes(k);
+const tourneyOpen = () => unlocked.length >= TOURNEY_UNLOCK_AT;
+
+function unlockNextAfter(key) {
+    const next = ROSTER[ROSTER.indexOf(key) + 1];
+    if (!next || isUnlocked(next)) return null;
+    unlocked.push(next);
+    persist();
+    return next;
+}
+
+let tourney = null;        // { stage, order } while a run is on
 let pickedDiff = null;     // the rival you chose, put back when the run ends
 
 let difficulty = 'normal';
@@ -2922,6 +3203,9 @@ function loadSaved() {
         if (RIVALS[d]) difficulty = d;
         const sp = localStorage.getItem('fingaz-speed');
         if (SPEEDS[sp]) speed = sp;
+        const un = JSON.parse(localStorage.getItem('fingaz-unlocked') || 'null');
+        if (Array.isArray(un)) unlocked = ROSTER.filter(k => un.includes(k) || STARTING_ROSTER.includes(k));
+        if (!isUnlocked(difficulty)) difficulty = STARTING_ROSTER[STARTING_ROSTER.length - 1];
     } catch (e) { history = []; }
 }
 function persist() {
@@ -2929,6 +3213,7 @@ function persist() {
         localStorage.setItem('fingaz-history', JSON.stringify(history.slice(-60)));
         localStorage.setItem('fingaz-diff', (tourney && pickedDiff) || difficulty);
         localStorage.setItem('fingaz-speed', speed);
+        localStorage.setItem('fingaz-unlocked', JSON.stringify(unlocked));
     } catch (e) { /* file:// or private mode — session-only is fine */ }
 }
 function recordResult(winner) {
@@ -2983,11 +3268,17 @@ function renderStats() {
     cup.innerHTML = trophies
         ? `${trophyArt()}<span>${trophies} tourney ${trophies === 1 ? 'trophy' : 'trophies'}</span>` : '';
 
-    document.getElementById('diff-row').innerHTML = Object.entries(RIVALS).map(([k, r]) =>
-        `<button class="btn${k === difficulty ? ' on' : ''}"${tourney ? ' disabled' : ''} onclick="setDifficulty('${k}')">
-            <span class="face">${renderPortrait(r.art)}</span>${r.name}<span class="sub">${r.level}</span>
-         </button>`
-    ).join('');
+    document.getElementById('diff-row').innerHTML = Object.entries(RIVALS).map(([k, r]) => {
+        if (!isUnlocked(k)) {
+            const after = RIVALS[ROSTER[ROSTER.indexOf(k) - 1]];
+            return `<button class="btn locked" disabled title="Beat ${after ? after.name : 'the one before'}">
+                        <span class="face">${renderPortrait(r.art)}</span>???<span class="sub">Beat ${after ? after.name : '\u2014'}</span>
+                    </button>`;
+        }
+        return `<button class="btn${k === difficulty ? ' on' : ''}"${tourney ? ' disabled' : ''} onclick="setDifficulty('${k}')">
+                    <span class="face">${renderPortrait(r.art)}</span>${r.name}<span class="sub">${r.level}</span>
+                </button>`;
+    }).join('');
 
     document.getElementById('diff-head').textContent =
         tourney ? 'Rival \u2014 set by the tourney' : 'Choose your rival';
@@ -3009,12 +3300,12 @@ function renderStats() {
         const foe = h.m === 'ai' ? name : 'P2';
         // rounds won: recorded on the run, or read back off the rival it ended on
         const rounds = h.r !== undefined ? h.r
-                     : youWon ? TOURNEY_ORDER.length
-                     : Math.max(0, TOURNEY_ORDER.indexOf(h.d));
+                     : youWon ? TOURNEY_ROUNDS
+                     : Math.min(TOURNEY_ROUNDS - 1, Math.max(0, Math.floor(ROSTER.indexOf(h.d) / 2)));
         const what = h.m === 'tourney'
             ? (youWon ? `${trophyArt()}Tourney won` : `${name} ended the run`)
             : (youWon ? 'You won' : foe + ' won');
-        const tag = h.m === 'tourney' ? `${rounds} of ${TOURNEY_ORDER.length}`
+        const tag = h.m === 'tourney' ? `${rounds} of ${TOURNEY_ROUNDS}`
                   : h.m === 'ai' ? ((RIVALS[h.d] || {}).level || h.d) : '2 player';
         return `<div class="stats-row ${youWon ? 'won' : 'lost'}">
                     <span class="what">${what}</span>
@@ -3036,8 +3327,8 @@ function renderTourneyBar() {
     barStage = tourney.stage;
 
     document.getElementById('tourney-round').textContent =
-        `Round ${tourney.stage + 1} of ${TOURNEY_ORDER.length}`;
-    document.getElementById('tourney-pips').innerHTML = TOURNEY_ORDER.map((k, i) => {
+        `Round ${tourney.stage + 1} of ${tourney.order.length}`;
+    document.getElementById('tourney-pips').innerHTML = tourney.order.map((k, i) => {
         const state = i < tourney.stage ? 'done' : i === tourney.stage ? 'now' : 'todo';
         return `<div class="pip ${state}" title="${RIVALS[k].name}">${renderPortrait(RIVALS[k].art)}</div>`;
     }).join('');
@@ -3083,10 +3374,50 @@ function tourneyBody(html) {
     return d;
 }
 
+/* ============================================================
+   NEW CHALLENGER
+   ============================================================ */
+function showChallenger(key) {
+    const r = RIVALS[key];
+    if (!r) return;
+    document.getElementById('challenger-face').innerHTML = renderPortrait(r.art);
+    document.getElementById('challenger-name').textContent = r.name;
+    document.getElementById('challenger-title').textContent = r.title;
+    const el = document.getElementById('challenger');
+    el.hidden = false;
+    el.classList.remove('run');
+    void el.offsetWidth;          // restart the entrance every time
+    el.classList.add('run');
+    playSound('charge');
+    setTimeout(() => { playSound('ko'); quake(); flashSpeedlines(); haptic(120); }, 170);
+    burstConfetti(innerWidth / 2, innerHeight * .42, ['#f4b32c', '#ffffff', '#ffeec4'], 60);
+}
+
+function closeChallenger() {
+    const el = document.getElementById('challenger');
+    el.hidden = true;
+    el.classList.remove('run');
+}
+
+/* the win that earned them is already recorded; this only decides who you
+   play next */
+function challengerTaken(key) {
+    closeChallenger();
+    difficulty = key;
+    persist();
+    applyMode('ai');
+}
+
+function offerChallenger(key) {
+    document.getElementById('challenger-fight').onclick = () => { playSound('tap'); challengerTaken(key); };
+    document.getElementById('challenger-later').onclick = () => { playSound('tap'); closeChallenger(); };
+    showChallenger(key);
+}
+
 /* beaten a rival: line up the next one, or pay out */
 function tourneyAdvance() {
     tourney.stage++;
-    difficulty = TOURNEY_ORDER[tourney.stage];
+    difficulty = tourney.order[tourney.stage];
     renderTourneyBar();
     const r = rival();
     closeSheet();
@@ -3098,9 +3429,18 @@ function tourneyAdvance() {
     );
 }
 
+/* a run can earn a rival on any round; the entrance waits until it is over */
+function flushPendingChallenger() {
+    if (!pendingChallenger) return false;
+    const key = pendingChallenger;
+    pendingChallenger = null;
+    offerChallenger(key);
+    return true;
+}
+
 function tourneyWon() {
-    history.push({ w: 'p1', m: 'tourney', d: TOURNEY_ORDER[TOURNEY_ORDER.length - 1],
-                   r: TOURNEY_ORDER.length });
+    history.push({ w: 'p1', m: 'tourney', d: tourney.order[tourney.order.length - 1],
+                   r: tourney.order.length });
     persist();
     playSound('win');
     [0, 260, 520].forEach((t, i) => setTimeout(() =>
@@ -3108,9 +3448,9 @@ function tourneyWon() {
             ['#f4b32c', '#2fa8e0', '#f0607d', '#34c79a', '#ffffff'], 90), t));
     setMood('victory');
     openSheet('The trophy is yours',
-        tourneyBody(`${trophyArt()}<p>All ${TOURNEY_ORDER.length} rivals, one after another — and a cup full of fingers to show for it.</p>`),
-        [{ label: 'Run it again', action: () => applyMode('tourney') },
-         { label: 'Back to VS CPU', ghost: true, action: () => applyMode('ai') }],
+        tourneyBody(`${trophyArt()}<p>All ${TOURNEY_ROUNDS} rivals, one after another — and a cup full of fingers to show for it.</p>`),
+        [{ label: 'Run it again', icon: 'trophy', action: () => applyMode('tourney') },
+         { label: 'Back to VS CPU', ghost: true, action: () => { closeSheet(); if (!flushPendingChallenger()) applyMode('ai'); } }],
         'spark');
 }
 
@@ -3121,8 +3461,8 @@ function tourneyLost() {
     setMood('defeat');
     openSheet(`Run over at round ${tourney.stage + 1}`,
         taunt('victory') || `${r.name} ends the run.`,
-        [{ label: 'Start again', action: () => applyMode('tourney') },
-         { label: 'Back to VS CPU', ghost: true, action: () => applyMode('ai') }],
+        [{ label: 'Start again', icon: 'trophy', action: () => applyMode('tourney') },
+         { label: 'Back to VS CPU', ghost: true, action: () => { closeSheet(); if (!flushPendingChallenger()) applyMode('ai'); } }],
         r.art, true, 'p2');
 }
 
@@ -3161,7 +3501,9 @@ function cpuMoves() {
                 if (after[pd] > 0 && p2[pa] + after[pd] >= 5) pressure++;
             });
         });
-        out.push({ a, d, kills, wins: kills && yours.length === 1, threats, pressure });
+        // what the move costs you: a whole hand, or the fingers it puts on one
+        const harm = kills ? 100 + p1[d] : p2[a];
+        out.push({ a, d, kills, wins: kills && yours.length === 1, threats, pressure, harm });
     }
     return out;
 }
@@ -3193,9 +3535,23 @@ function cpuTurn() {
     const pool = kills.length ? kills : moves;
     if (A.pick === 'kill') return go(rand(pool));
 
+    // takes the biggest bite going and never mind what it leaves open
+    if (A.pick === 'greedy') {
+        const worst = Math.max(...moves.map(m => m.harm));
+        return go(rand(moves.filter(m => m.harm === worst)));
+    }
+
     const safest = Math.min(...pool.map(m => m.threats));
     const safe = pool.filter(m => m.threats === safest);
     if (A.pick === 'safe') return go(rand(safe));
+
+    // lines up the next knockout first, and only then worries about cover
+    if (A.pick === 'sniper') {
+        const most = Math.max(...pool.map(m => m.pressure));
+        const lined = pool.filter(m => m.pressure === most);
+        const cover = Math.min(...lined.map(m => m.threats));
+        return go(rand(lined.filter(m => m.threats === cover)));
+    }
 
     const most = Math.max(...safe.map(m => m.pressure));
     return go(rand(safe.filter(m => m.pressure === most)));
@@ -3363,6 +3719,9 @@ function checkWin() {
 
     const youWon = p2Out;
     gameState.locked = true;
+    // beating a rival opens the next one along; mid-run it waits for the run
+    const earned = (youWon && gameState.mode === 'ai') ? unlockNextAfter(difficulty) : null;
+    if (earned && tourney) pendingChallenger = earned;
     // a round of a tourney is not a game on its own — the run is recorded at its end
     if (!tourney) recordResult(youWon ? 'p1' : 'p2');
     updateUI();
@@ -3386,8 +3745,9 @@ function checkWin() {
     setTimeout(() => {
         if (tourney) {
             if (!youWon) return tourneyLost();
-            return tourney.stage >= TOURNEY_ORDER.length - 1 ? tourneyWon() : tourneyAdvance();
+            return tourney.stage >= tourney.order.length - 1 ? tourneyWon() : tourneyAdvance();
         }
+        if (earned) { setMood('victory'); return offerChallenger(earned); }
         setMood(youWon ? 'victory' : 'defeat');
         openSheet(
             youWon ? 'You win!' : `${p2Label()} wins!`,
@@ -3489,8 +3849,8 @@ function applyMode(mode) {
 
     if (tour) {
         if (!tourney) pickedDiff = difficulty;
-        tourney = { stage: 0 };
-        difficulty = TOURNEY_ORDER[0];
+        tourney = { stage: 0, order: drawTourneyLadder() };
+        difficulty = tourney.order[0];
     } else if (tourney) {
         tourney = null;
         if (pickedDiff) difficulty = pickedDiff;
@@ -3522,13 +3882,13 @@ const MODE_PITCH = {
     ai:      { label: 'VS CPU',   icon: 'rivalFace', line: `one rival, your pick.` },
     pvp:     { label: '2 player', icon: 'phoneSwap', line: 'pass one phone between you, decks facing each other.' },
     tourney: { label: 'Tourney',  icon: 'trophy',
-               line: `all ${TOURNEY_ORDER.length} rivals back to back for the trophy \u2014 lose once and the run is over.` }
+               line: `${TOURNEY_ROUNDS} rivals drawn fresh from the ${ROSTER.length} \u2014 lose once and the run is over.` }
 };
 
 document.getElementById('mode-btn').addEventListener('click', () => {
     playSound('tap');
     const current = tourney ? 'tourney' : gameState.mode;
-    const others = Object.keys(MODE_PITCH).filter(m => m !== current);
+    const others = Object.keys(MODE_PITCH).filter(m => m !== current && modeAvailable(m));
     openSheet(
         'Change mode?',
         others.map(m => `${MODE_PITCH[m].label} \u2014 ${MODE_PITCH[m].line}`).join('\n') +
@@ -3577,15 +3937,25 @@ document.getElementById('p2-avatar').addEventListener('click', () => openStats('
 
 function startMode(mode) {
     playSound('select');
+    paintStartModes();
     document.getElementById('start').hidden = true;
     applyMode(mode);
 }
 
-document.getElementById('start-modes').innerHTML = Object.entries(MODE_PITCH).map(([k, m]) =>
-    `<button class="btn ${k === 'tourney' ? 'btn-gold' : k === 'pvp' ? 'btn-p2' : 'btn-p1'}"
-             onclick="startMode('${k}')">
-        <span class="t">${ICONS[m.icon]}${m.label}</span><span class="d">${m.line}</span>
-     </button>`).join('');
+function modeAvailable(k) { return k !== 'tourney' || tourneyOpen(); }
+function modeLine(k) {
+    return modeAvailable(k) ? MODE_PITCH[k].line
+        : `locked \u2014 unlock ${TOURNEY_UNLOCK_AT} rivals to open it (you have ${unlocked.length}).`;
+}
+
+function paintStartModes() {
+    document.getElementById('start-modes').innerHTML = Object.entries(MODE_PITCH).map(([k, m]) =>
+        `<button class="btn ${k === 'tourney' ? 'btn-gold' : k === 'pvp' ? 'btn-p2' : 'btn-p1'}${modeAvailable(k) ? '' : ' locked'}"
+                 ${modeAvailable(k) ? `onclick="startMode('${k}')"` : 'disabled'}>
+            <span class="t">${ICONS[m.icon]}${m.label}</span><span class="d">${modeLine(k)}</span>
+         </button>`).join('');
+}
+paintStartModes();
 
 loadSaved();
 paintIcons();
