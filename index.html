@@ -3456,8 +3456,7 @@ function renderStats() {
         <div class="col"><span class="who">You</span><span class="v p1">${wins}</span></div>
         <div class="col"><span class="who">played</span><span class="v" style="opacity:.35">${history.length}</span></div>
         <div class="col"><span class="who">Rival</span><span class="v p2">${losses}</span></div>`;
-    document.getElementById('stats-played').textContent =
-        `${history.length} ${history.length === 1 ? 'game' : 'games'} \u00b7 ${playedLabel(playTotal())} played`;
+    document.getElementById('stats-played').textContent = `${playedLabel(playTotal())} played`;
 
     const cup = document.getElementById('stats-trophies');
     cup.hidden = !trophies;
