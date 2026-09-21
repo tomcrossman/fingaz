@@ -1,5 +1,5 @@
 /* Cache the game so it keeps working with no connection. Bump CACHE on release. */
-const CACHE = 'fingaz-v5';
+const CACHE = 'fingaz-v6';
 const ASSETS = ['./', './index.html', './manifest.webmanifest',
                 './icon-192.png', './icon-512.png', './icon-180.png'];
 
