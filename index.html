@@ -561,6 +561,20 @@ main {
    SPEECH BUBBLE BANNER
    ============================================================ */
 .bubble-wrap { position: relative; display: flex; justify-content: center; padding: 4px 0 10px; }
+/* the threshold only moves in a long game, so it is only shown in one */
+.sudden-chip {
+    position: absolute; left: 50%; top: calc(100% - 4px);
+    transform: translateX(-50%);
+    padding: 3px 9px;
+    font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase;
+    border: 2.5px solid var(--ink); border-radius: 9px;
+    background: var(--danger); color: #fff;
+    box-shadow: 3px 3px 0 var(--ink);
+    white-space: nowrap;
+    animation: suddenIn .3s cubic-bezier(.2,1.6,.4,1) both;
+}
+.sudden-chip[hidden] { display: none; }
+@keyframes suddenIn { 0% { opacity: 0; transform: translateX(-50%) scale(.6); } 100% { opacity: 1; } }
 
 /* The rival's line lands centre-field where you are already looking, holds for
    a beat, then flies up to the nameplate and rests there as their status. */
@@ -1161,6 +1175,7 @@ body.pvp .toss-roll:active:not(:disabled) { transform: translate(6px, 6px); }
             <span class="rs-text" id="rs-text"></span>
         </div>
         <div class="bubble" id="bubble">Pick one of your hands, then tap a rival hand to strike!</div>
+        <div class="sudden-chip" id="sudden-chip" hidden></div>
         <div class="hs-slot" id="hs-right"></div>
     </div>
 
@@ -2535,7 +2550,7 @@ function playSound(name) {
    ============================================================ */
 /* Bumped with every release, alongside CACHE in sw.js — the two are meant to
    read the same, so the card tells you which build actually reached you. */
-const APP_VERSION = 'v13';
+const APP_VERSION = 'v14';
 
 const MUSIC_VOL = 0.115;
 const NOTE = n => 440 * Math.pow(2, (n - 69) / 12);
@@ -2810,6 +2825,7 @@ let gameState = {
     selectedHand: null,
     activeSpecial: null,
     locked: false,
+    turns: 0,
     rivalLine: null,
     scores: { p1: 0, p2: 0 },
     p1: { left: 1, right: 1, abilities: { subtraction: true, team: true } },
@@ -2879,7 +2895,7 @@ function updateUI() {
         const live = gameState[w][side] > 0;
         if (!power || w !== defender || !live) { el.hidden = true; return; }
         const total = gameState[w][side] + power;
-        const ko = total >= 5;
+        const ko = total >= koAt();
         el.textContent = ko ? `${total} · OUT!` : `→ ${total}`;
         el.className = 'preview' + (ko ? ' ko' : '') + (flipPreview ? ' flip' : '');
         el.hidden = false;
@@ -2937,6 +2953,10 @@ function updateUI() {
         document.documentElement.style.setProperty('--foe-soft', FOE_SOFT[foeArt] || 'var(--p2-soft)');
     }
     document.getElementById('p2-name').textContent = p2Label();
+
+    const chip = document.getElementById('sudden-chip');
+    chip.hidden = koAt() >= 5;
+    chip.textContent = `Sudden death \u00b7 breaks at ${koAt()}`;
 
     document.getElementById('score-p1').textContent = gameState.scores.p1;
     document.getElementById('score-p2').textContent = gameState.scores.p2;
@@ -3024,7 +3044,7 @@ function executeAttack(attackerSide, defenderSide) {
         const total = before + power;
         let next;
 
-        if (total >= 5) {
+        if (total >= koAt()) {
             next = 0;
             rivalSays(att === 'p2' ? 'ko' : 'hurt');
             playSound('ko');
@@ -3057,7 +3077,7 @@ function executeTeamAttack(att, defenderSide) {
     const def = other(att);
     const power = gameState[att].left + gameState[att].right;
     const total = gameState[def][defenderSide] + power;
-    const next = total >= 5 ? 0 : total;
+    const next = total >= koAt() ? 0 : total;
 
     playSound(next === 0 ? 'ko' : 'blast');
     haptic(70);
@@ -3982,10 +4002,26 @@ function tourneyLost() {
 /* ============================================================
    TURNS + CPU
    ============================================================ */
+/* Sudden death. With the opening drawn rather than won, two careful players
+   can keep the board going round in circles; this closes it. Hands break at
+   five as always, then at four, then at three, so a stalemate tightens into a
+   finish instead of lasting forever. */
+const SUDDEN = [{ at: 20, ko: 4 }, { at: 28, ko: 3 }];
+const koAt = () => (SUDDEN.slice().reverse().find(s => gameState.turns >= s.at) || { ko: 5 }).ko;
+
 function switchTurn() {
     gameState.selectedHand = null;
     gameState.activeSpecial = null;
     gameState.turn = other(gameState.turn);
+    gameState.turns++;
+    const step = SUDDEN.find(s => s.at === gameState.turns);
+    if (step) {
+        playSound('charge');
+        haptic(90);
+        flashSpeedlines();
+        say(`SUDDEN DEATH \u2014 hands now break at ${step.ko}!`, true);
+        setMood('tense');
+    }
     updateUI();
     if (gameState.mode === 'ai' && gameState.turn === 'p2') setTimeout(cpuTurn, pace(950));
 }
@@ -3998,20 +4034,20 @@ function cpuMoves() {
     const out = [];
     for (const a of mine) for (const d of yours) {
         const total = p2[a] + p1[d];
-        const kills = total >= 5;
+        const kills = total >= koAt();
         const after = { left: p1.left, right: p1.right };
         after[d] = kills ? 0 : total;
         let threats = 0;
         ['left', 'right'].forEach(pa => {
             if (after[pa] > 0) ['left', 'right'].forEach(pd => {
-                if (p2[pd] > 0 && after[pa] + p2[pd] >= 5) threats++;
+                if (p2[pd] > 0 && after[pa] + p2[pd] >= koAt()) threats++;
             });
         });
         // and what it sets up: its own knockouts on the board it leaves behind
         let pressure = 0;
         ['left', 'right'].forEach(pa => {
             if (p2[pa] > 0) ['left', 'right'].forEach(pd => {
-                if (after[pd] > 0 && p2[pa] + after[pd] >= 5) pressure++;
+                if (after[pd] > 0 && p2[pa] + after[pd] >= koAt()) pressure++;
             });
         });
         // what the move costs you: a whole hand, or the fingers it puts on one
@@ -4304,6 +4340,7 @@ function resetGame() {
     gameState.selectedHand = null;
     gameState.activeSpecial = null;
     gameState.locked = false;
+    gameState.turns = 0;
     gameState.rivalLine = null;
     gameState.p1 = { left: 1, right: 1, abilities: { subtraction: true, team: true } };
     gameState.p2 = { left: 1, right: 1, abilities: { subtraction: true, team: true } };
@@ -4367,6 +4404,8 @@ function showRules() {
         <p><b>Goal:</b> knock out both of the rival's hands.</p>
         <p><b>Attack:</b> tap one of your hands, then a rival hand. Your fingers get added to theirs.</p>
         <p><b>5 or more:</b> that hand is knocked out for good.</p>
+        <p><b>Sudden death:</b> if nobody has finished it by turn 20, hands start
+           breaking at 4 \u2014 and at 3 from turn 28. Long games end.</p>
         <p><b>Shift:</b> slide fingers between your own hands instead of attacking.</p>
         <p><b>Half:</b> with one hand out and an even number on the other, split it in half to bring the dead hand back.</p>
         <p><b>Minus:</b> once per game, snip a rival hand down by as many fingers as you are holding on one of your own hands.</p>
